@@ -93,20 +93,20 @@ export const BudgetManager: React.FC = () => {
             setBudgetToEdit(null);
             setIsModalOpen(true);
           }}
-          className="px-4 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs sm:text-sm font-semibold flex items-center gap-2 shadow-sm shadow-indigo-200 transition active:scale-95 self-start sm:self-auto"
+          className="px-4 py-2.5 bg-gradient-to-r from-indigo-600 to-violet-600 hover:from-indigo-500 hover:to-violet-500 text-white rounded-xl text-xs sm:text-sm font-bold flex items-center gap-2 shadow-sm shadow-indigo-500/25 transition active:scale-95 self-start sm:self-auto"
         >
-          <Plus size={16} />
+          <Plus size={16} strokeWidth={2.5} />
           <span>Set New Budget</span>
         </button>
       </div>
 
       {/* Summary KPI Cards */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-        <div className="bg-white p-5 rounded-2xl border border-slate-200/80 shadow-sm">
-          <span className="text-xs font-semibold text-slate-400 uppercase tracking-wider block mb-1">
+        <div className="bg-white/90 backdrop-blur-md p-5 rounded-2xl border border-slate-200/70 shadow-[0_2px_16px_rgba(0,0,0,0.03)] hover:shadow-md transition-all duration-200 hover:-translate-y-0.5">
+          <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider block mb-1">
             Total Monthly Budget
           </span>
-          <div className="text-2xl font-bold text-slate-900">
+          <div className="text-2xl font-black tracking-tight text-slate-900">
             {formatCurrency(totalBudgeted, settings.currency, settings.showDecimals)}
           </div>
           <div className="mt-2 text-xs text-slate-500 font-medium">
@@ -114,11 +114,11 @@ export const BudgetManager: React.FC = () => {
           </div>
         </div>
 
-        <div className="bg-white p-5 rounded-2xl border border-slate-200/80 shadow-sm">
-          <span className="text-xs font-semibold text-slate-400 uppercase tracking-wider block mb-1">
+        <div className="bg-white/90 backdrop-blur-md p-5 rounded-2xl border border-slate-200/70 shadow-[0_2px_16px_rgba(0,0,0,0.03)] hover:shadow-md transition-all duration-200 hover:-translate-y-0.5">
+          <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider block mb-1">
             Total Spent This Month
           </span>
-          <div className="text-2xl font-bold text-indigo-600">
+          <div className="text-2xl font-black tracking-tight text-indigo-600">
             {formatCurrency(totalSpentInBudgets, settings.currency, settings.showDecimals)}
           </div>
           <div className="mt-2 text-xs text-slate-500 font-medium">
@@ -126,11 +126,11 @@ export const BudgetManager: React.FC = () => {
           </div>
         </div>
 
-        <div className="bg-white p-5 rounded-2xl border border-slate-200/80 shadow-sm">
-          <span className="text-xs font-semibold text-slate-400 uppercase tracking-wider block mb-1">
+        <div className="bg-white/90 backdrop-blur-md p-5 rounded-2xl border border-slate-200/70 shadow-[0_2px_16px_rgba(0,0,0,0.03)] hover:shadow-md transition-all duration-200 hover:-translate-y-0.5">
+          <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider block mb-1">
             Budget Health
           </span>
-          <div className="text-2xl font-bold flex items-center gap-2">
+          <div className="text-2xl font-black tracking-tight flex items-center gap-2">
             {overCount > 0 ? (
               <span className="text-rose-600 flex items-center gap-1.5">
                 <AlertCircle size={22} />
@@ -200,7 +200,7 @@ export const BudgetManager: React.FC = () => {
             return (
               <div
                 key={item.id}
-                className="bg-white p-5 rounded-2xl border border-slate-200/80 shadow-sm hover:shadow-md transition space-y-4"
+                className="bg-white/90 backdrop-blur-md p-5 rounded-2xl border border-slate-200/70 shadow-[0_2px_16px_rgba(0,0,0,0.03)] hover:shadow-md transition-all duration-200 hover:-translate-y-0.5 space-y-4"
               >
                 {/* Header */}
                 <div className="flex items-center justify-between">

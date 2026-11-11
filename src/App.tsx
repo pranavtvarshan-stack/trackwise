@@ -58,7 +58,10 @@ const MainApp: React.FC = () => {
   };
 
   return (
-    <div className="min-h-screen bg-slate-50 flex flex-col font-['Plus_Jakarta_Sans',sans-serif]">
+    <div className="min-h-screen bg-[#f8fafc] flex flex-col font-['Plus_Jakarta_Sans',sans-serif] selection:bg-indigo-100 selection:text-indigo-900 relative">
+      {/* Subtle Ambient Background Glow for Modern Fintech Depth */}
+      <div className="fixed top-0 left-1/2 -translate-x-1/2 w-full max-w-7xl h-80 bg-gradient-to-b from-indigo-50/50 via-purple-50/20 to-transparent pointer-events-none -z-10" />
+
       {/* Top Header */}
       <Header
         onOpenAddModal={() => {

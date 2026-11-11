@@ -187,20 +187,20 @@ export const OverviewDashboard: React.FC<OverviewDashboardProps> = ({
   return (
     <div className="space-y-6">
       {/* Date Range Selector Bar */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-white p-3 rounded-2xl border border-slate-200/80 shadow-sm">
-        <div className="flex items-center gap-2 text-xs font-semibold text-slate-500 px-2">
-          <Calendar size={15} />
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-white/80 backdrop-blur-xl p-2.5 sm:p-3 rounded-2xl border border-slate-200/70 shadow-[0_2px_12px_rgba(0,0,0,0.03)]">
+        <div className="flex items-center gap-2 text-xs font-bold text-slate-500 px-2">
+          <Calendar size={15} className="text-indigo-600" />
           <span>Period:</span>
         </div>
-        <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar">
+        <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar py-0.5">
           {DATE_RANGE_OPTIONS.map((opt) => (
             <button
               key={opt.id}
               onClick={() => setFilters((prev) => ({ ...prev, dateRange: opt.id }))}
-              className={`px-3 py-1.5 rounded-xl text-xs font-semibold whitespace-nowrap transition-all ${
+              className={`px-3 py-1.5 rounded-xl text-xs font-bold whitespace-nowrap transition-all duration-200 active:scale-95 ${
                 filters.dateRange === opt.id
-                  ? 'bg-indigo-600 text-white shadow-sm'
-                  : 'bg-slate-100 hover:bg-slate-200 text-slate-600'
+                  ? 'bg-slate-900 text-white shadow-xs'
+                  : 'bg-slate-100/80 hover:bg-slate-200/70 text-slate-600'
               }`}
             >
               {opt.label}
@@ -211,13 +211,13 @@ export const OverviewDashboard: React.FC<OverviewDashboardProps> = ({
 
       {/* Over-budget Banner Alert if any */}
       {overBudgets.length > 0 && (
-        <div className="p-4 bg-rose-50 border border-rose-200 rounded-2xl flex items-center justify-between gap-4">
+        <div className="p-4 bg-gradient-to-r from-rose-50 to-orange-50/80 border border-rose-200/80 rounded-2xl flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-xs animate-fade-in">
           <div className="flex items-center gap-3">
-            <div className="p-2 bg-rose-100 text-rose-700 rounded-xl">
-              <AlertTriangle size={20} />
+            <div className="p-2.5 bg-rose-500 text-white rounded-xl shadow-xs shadow-rose-500/20 flex-shrink-0">
+              <AlertTriangle size={18} />
             </div>
             <div>
-              <h4 className="text-sm font-bold text-rose-900">
+              <h4 className="text-sm font-bold text-rose-950">
                 Budget Exceeded in {overBudgets.length} Categor{overBudgets.length > 1 ? 'ies' : 'y'}!
               </h4>
               <p className="text-xs text-rose-700">
@@ -227,7 +227,7 @@ export const OverviewDashboard: React.FC<OverviewDashboardProps> = ({
           </div>
           <button
             onClick={() => onNavigateToTab('budgets')}
-            className="px-3 py-1.5 bg-rose-600 hover:bg-rose-700 text-white text-xs font-semibold rounded-xl shadow-sm transition whitespace-nowrap"
+            className="px-3.5 py-1.5 bg-rose-600 hover:bg-rose-700 text-white text-xs font-bold rounded-xl shadow-sm transition active:scale-95 whitespace-nowrap self-start sm:self-auto"
           >
             Manage Budgets
           </button>
@@ -237,74 +237,74 @@ export const OverviewDashboard: React.FC<OverviewDashboardProps> = ({
       {/* Top Stat Cards */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
         {/* Net Savings / Balance */}
-        <div className="bg-white p-3.5 sm:p-5 rounded-2xl border border-slate-200/80 shadow-sm hover:shadow-md transition">
-          <div className="flex items-center justify-between text-slate-500 mb-1.5 sm:mb-2">
-            <span className="text-[10px] sm:text-xs font-semibold uppercase tracking-wider truncate">Net Savings</span>
-            <div className={`p-1.5 sm:p-2 rounded-xl flex-shrink-0 ${netSavings >= 0 ? 'bg-emerald-50 text-emerald-600' : 'bg-rose-50 text-rose-600'}`}>
-              <Wallet size={16} className="sm:w-[18px] sm:h-[18px]" />
+        <div className="bg-white/90 backdrop-blur-md p-4 sm:p-5 rounded-2xl border border-slate-200/70 shadow-[0_2px_16px_rgba(0,0,0,0.03)] hover:shadow-md transition-all duration-200 hover:-translate-y-0.5">
+          <div className="flex items-center justify-between text-slate-500 mb-2">
+            <span className="text-[10px] sm:text-xs font-bold uppercase tracking-wider text-slate-400 truncate">Net Savings</span>
+            <div className={`p-2 rounded-xl flex-shrink-0 shadow-2xs ${netSavings >= 0 ? 'bg-emerald-50 text-emerald-600 border border-emerald-100' : 'bg-rose-50 text-rose-600 border border-rose-100'}`}>
+              <Wallet size={16} className="sm:w-[17px] sm:h-[17px]" />
             </div>
           </div>
-          <div className={`text-lg sm:text-2xl font-bold tracking-tight truncate ${netSavings >= 0 ? 'text-slate-900' : 'text-rose-600'}`}>
+          <div className={`text-lg sm:text-2xl font-black tracking-tight truncate ${netSavings >= 0 ? 'text-slate-900' : 'text-rose-600'}`}>
             {formatCurrency(netSavings, settings.currency, settings.showDecimals)}
           </div>
-          <div className="mt-1.5 sm:mt-2 text-[11px] sm:text-xs flex items-center gap-1 font-medium text-slate-500 truncate">
-            <span>Rate:</span>
-            <span className={`font-bold ${savingsRate >= 20 ? 'text-emerald-600' : 'text-amber-600'}`}>
+          <div className="mt-2 text-[11px] sm:text-xs flex items-center gap-1 font-medium text-slate-500 truncate">
+            <span>Savings Rate:</span>
+            <span className={`font-bold px-1.5 py-0.5 rounded-md ${savingsRate >= 20 ? 'bg-emerald-50 text-emerald-700' : 'bg-amber-50 text-amber-700'}`}>
               {formatPercentage(savingsRate)}
             </span>
           </div>
         </div>
 
         {/* Total Income */}
-        <div className="bg-white p-3.5 sm:p-5 rounded-2xl border border-slate-200/80 shadow-sm hover:shadow-md transition">
-          <div className="flex items-center justify-between text-slate-500 mb-1.5 sm:mb-2">
-            <span className="text-[10px] sm:text-xs font-semibold uppercase tracking-wider truncate">Total Income</span>
-            <div className="p-1.5 sm:p-2 rounded-xl bg-emerald-50 text-emerald-600 flex-shrink-0">
-              <ArrowUpRight size={16} className="sm:w-[18px] sm:h-[18px]" />
+        <div className="bg-white/90 backdrop-blur-md p-4 sm:p-5 rounded-2xl border border-slate-200/70 shadow-[0_2px_16px_rgba(0,0,0,0.03)] hover:shadow-md transition-all duration-200 hover:-translate-y-0.5">
+          <div className="flex items-center justify-between text-slate-500 mb-2">
+            <span className="text-[10px] sm:text-xs font-bold uppercase tracking-wider text-slate-400 truncate">Total Income</span>
+            <div className="p-2 rounded-xl bg-emerald-50 text-emerald-600 border border-emerald-100 flex-shrink-0 shadow-2xs">
+              <ArrowUpRight size={16} className="sm:w-[17px] sm:h-[17px]" />
             </div>
           </div>
-          <div className="text-lg sm:text-2xl font-bold tracking-tight text-emerald-600 truncate">
+          <div className="text-lg sm:text-2xl font-black tracking-tight text-emerald-600 truncate">
             {formatCurrency(totalIncome, settings.currency, settings.showDecimals)}
           </div>
-          <div className="mt-1.5 sm:mt-2 text-[11px] sm:text-xs text-slate-500 font-medium truncate">
-            {filteredTransactions.filter((t) => t.type === 'income').length} source(s)
+          <div className="mt-2 text-[11px] sm:text-xs text-slate-400 font-medium truncate">
+            {filteredTransactions.filter((t) => t.type === 'income').length} income source(s)
           </div>
         </div>
 
         {/* Total Expenses */}
-        <div className="bg-white p-3.5 sm:p-5 rounded-2xl border border-slate-200/80 shadow-sm hover:shadow-md transition">
-          <div className="flex items-center justify-between text-slate-500 mb-1.5 sm:mb-2">
-            <span className="text-[10px] sm:text-xs font-semibold uppercase tracking-wider truncate">Total Expenses</span>
-            <div className="p-1.5 sm:p-2 rounded-xl bg-rose-50 text-rose-600 flex-shrink-0">
-              <ArrowDownRight size={16} className="sm:w-[18px] sm:h-[18px]" />
+        <div className="bg-white/90 backdrop-blur-md p-4 sm:p-5 rounded-2xl border border-slate-200/70 shadow-[0_2px_16px_rgba(0,0,0,0.03)] hover:shadow-md transition-all duration-200 hover:-translate-y-0.5">
+          <div className="flex items-center justify-between text-slate-500 mb-2">
+            <span className="text-[10px] sm:text-xs font-bold uppercase tracking-wider text-slate-400 truncate">Total Expenses</span>
+            <div className="p-2 rounded-xl bg-rose-50 text-rose-600 border border-rose-100 flex-shrink-0 shadow-2xs">
+              <ArrowDownRight size={16} className="sm:w-[17px] sm:h-[17px]" />
             </div>
           </div>
-          <div className="text-lg sm:text-2xl font-bold tracking-tight text-rose-600 truncate">
+          <div className="text-lg sm:text-2xl font-black tracking-tight text-rose-600 truncate">
             {formatCurrency(totalExpenses, settings.currency, settings.showDecimals)}
           </div>
-          <div className="mt-1.5 sm:mt-2 text-[11px] sm:text-xs text-slate-500 font-medium truncate">
+          <div className="mt-2 text-[11px] sm:text-xs text-slate-400 font-medium truncate">
             {filteredTransactions.filter((t) => t.type === 'expense').length} expense(s)
           </div>
         </div>
 
         {/* Top Spending Category */}
-        <div className="bg-white p-3.5 sm:p-5 rounded-2xl border border-slate-200/80 shadow-sm hover:shadow-md transition">
-          <div className="flex items-center justify-between text-slate-500 mb-1.5 sm:mb-2">
-            <span className="text-[10px] sm:text-xs font-semibold uppercase tracking-wider truncate">Top Expense</span>
-            <div className="p-1.5 sm:p-2 rounded-xl bg-indigo-50 text-indigo-600 flex-shrink-0">
-              <TrendingUp size={16} className="sm:w-[18px] sm:h-[18px]" />
+        <div className="bg-white/90 backdrop-blur-md p-4 sm:p-5 rounded-2xl border border-slate-200/70 shadow-[0_2px_16px_rgba(0,0,0,0.03)] hover:shadow-md transition-all duration-200 hover:-translate-y-0.5">
+          <div className="flex items-center justify-between text-slate-500 mb-2">
+            <span className="text-[10px] sm:text-xs font-bold uppercase tracking-wider text-slate-400 truncate">Top Category</span>
+            <div className="p-2 rounded-xl bg-indigo-50 text-indigo-600 border border-indigo-100 flex-shrink-0 shadow-2xs">
+              <TrendingUp size={16} className="sm:w-[17px] sm:h-[17px]" />
             </div>
           </div>
-          <div className="text-base sm:text-lg font-bold tracking-tight text-slate-800 truncate">
+          <div className="text-base sm:text-lg font-black tracking-tight text-slate-900 truncate">
             {topSpendingCategory.category ? topSpendingCategory.category.name : 'None'}
           </div>
-          <div className="mt-1.5 sm:mt-2 text-[11px] sm:text-xs text-slate-500 font-medium truncate">
+          <div className="mt-2 text-[11px] sm:text-xs text-slate-500 font-medium truncate">
             {topSpendingCategory.amount > 0 ? (
-              <span className="text-slate-700 font-semibold truncate">
+              <span className="text-slate-700 font-bold truncate">
                 {formatCurrency(topSpendingCategory.amount, settings.currency, false)}
               </span>
             ) : (
-              'None'
+              'No expense data'
             )}
           </div>
         </div>
@@ -313,20 +313,20 @@ export const OverviewDashboard: React.FC<OverviewDashboardProps> = ({
       {/* Charts Grid */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Monthly Cashflow Trend (Income vs Expense) */}
-        <div className="lg:col-span-2 bg-white p-5 rounded-2xl border border-slate-200/80 shadow-sm">
+        <div className="lg:col-span-2 bg-white/90 backdrop-blur-md p-5 sm:p-6 rounded-2xl border border-slate-200/70 shadow-[0_2px_16px_rgba(0,0,0,0.03)]">
           <div className="flex items-center justify-between mb-4">
             <div>
-              <h3 className="text-base font-bold text-slate-800">Cash Flow History</h3>
-              <p className="text-xs text-slate-500">Monthly Income vs. Spending</p>
+              <h3 className="text-base font-extrabold text-slate-900 tracking-tight">Cash Flow History</h3>
+              <p className="text-xs text-slate-400 font-medium">Monthly Income vs. Spending balance</p>
             </div>
-            <div className="flex items-center gap-4 text-xs font-semibold">
-              <div className="flex items-center gap-1.5">
-                <span className="w-3 h-3 rounded-full bg-emerald-500 inline-block"></span>
-                <span className="text-slate-600">Income</span>
+            <div className="flex items-center gap-3 sm:gap-4 text-xs font-bold">
+              <div className="flex items-center gap-1.5 px-2.5 py-1 bg-emerald-50 rounded-lg text-emerald-800 border border-emerald-100">
+                <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 inline-block shadow-2xs"></span>
+                <span>Income</span>
               </div>
-              <div className="flex items-center gap-1.5">
-                <span className="w-3 h-3 rounded-full bg-rose-500 inline-block"></span>
-                <span className="text-slate-600">Expense</span>
+              <div className="flex items-center gap-1.5 px-2.5 py-1 bg-rose-50 rounded-lg text-rose-800 border border-rose-100">
+                <span className="w-2.5 h-2.5 rounded-full bg-rose-500 inline-block shadow-2xs"></span>
+                <span>Expense</span>
               </div>
             </div>
           </div>
@@ -337,24 +337,32 @@ export const OverviewDashboard: React.FC<OverviewDashboardProps> = ({
                 <YAxis stroke="#94a3b8" fontSize={11} tickLine={false} />
                 <Tooltip
                   formatter={(val: number) => formatCurrency(val, settings.currency, settings.showDecimals)}
-                  contentStyle={{ borderRadius: '12px', border: '1px solid #e2e8f0', boxShadow: '0 4px 12px rgba(0,0,0,0.05)' }}
+                  contentStyle={{ 
+                    borderRadius: '16px', 
+                    background: 'rgba(255, 255, 255, 0.96)', 
+                    backdropFilter: 'blur(16px)', 
+                    border: '1px solid rgba(226, 232, 240, 0.8)', 
+                    boxShadow: '0 12px 30px -4px rgba(0, 0, 0, 0.08)',
+                    fontWeight: 600,
+                    fontSize: '12px'
+                  }}
                 />
-                <Bar dataKey="income" name="Income" fill="#10b981" radius={[6, 6, 0, 0]} maxBarSize={40} />
-                <Bar dataKey="expense" name="Expense" fill="#f43f5e" radius={[6, 6, 0, 0]} maxBarSize={40} />
+                <Bar dataKey="income" name="Income" fill="#10b981" radius={[6, 6, 0, 0]} maxBarSize={36} />
+                <Bar dataKey="expense" name="Expense" fill="#f43f5e" radius={[6, 6, 0, 0]} maxBarSize={36} />
               </BarChart>
             </ResponsiveContainer>
           </div>
         </div>
 
         {/* Expense Category Breakdown Donut */}
-        <div className="bg-white p-5 rounded-2xl border border-slate-200/80 shadow-sm flex flex-col">
+        <div className="bg-white/90 backdrop-blur-md p-5 sm:p-6 rounded-2xl border border-slate-200/70 shadow-[0_2px_16px_rgba(0,0,0,0.03)] flex flex-col">
           <div className="flex items-center justify-between mb-2">
-            <h3 className="text-base font-bold text-slate-800">Category Share</h3>
-            <span className="text-xs text-slate-400 font-medium">Expenses</span>
+            <h3 className="text-base font-extrabold text-slate-900 tracking-tight">Category Share</h3>
+            <span className="text-[11px] font-bold uppercase tracking-wider text-slate-400 bg-slate-100 px-2 py-0.5 rounded-full">Expenses</span>
           </div>
           {categoryChartData.length === 0 ? (
             <div className="flex-1 flex flex-col items-center justify-center p-6 text-center text-slate-400">
-              <PiggyBank size={36} className="mb-2 stroke-1" />
+              <PiggyBank size={36} className="mb-2 stroke-1 text-slate-300" />
               <p className="text-xs">No expense data found for this period</p>
             </div>
           ) : (
@@ -378,18 +386,27 @@ export const OverviewDashboard: React.FC<OverviewDashboardProps> = ({
                     </Pie>
                     <Tooltip
                       formatter={(val: number) => formatCurrency(val, settings.currency, settings.showDecimals)}
+                      contentStyle={{ 
+                        borderRadius: '16px', 
+                        background: 'rgba(255, 255, 255, 0.96)', 
+                        backdropFilter: 'blur(16px)', 
+                        border: '1px solid rgba(226, 232, 240, 0.8)', 
+                        boxShadow: '0 12px 30px -4px rgba(0, 0, 0, 0.08)',
+                        fontWeight: 600,
+                        fontSize: '12px'
+                      }}
                     />
                   </PieChart>
                 </ResponsiveContainer>
               </div>
-              <div className="mt-2 space-y-1.5 max-h-36 overflow-y-auto pr-1">
+              <div className="mt-2 space-y-1.5 max-h-36 overflow-y-auto pr-1 custom-scrollbar">
                 {categoryChartData.slice(0, 5).map((item) => (
-                  <div key={item.name} className="flex items-center justify-between text-xs">
+                  <div key={item.name} className="flex items-center justify-between text-xs p-1 rounded-lg hover:bg-slate-50 transition">
                     <div className="flex items-center gap-2 truncate">
-                      <span className="w-2.5 h-2.5 rounded-full flex-shrink-0" style={{ backgroundColor: item.color }} />
-                      <span className="text-slate-600 truncate font-medium">{item.name}</span>
+                      <span className="w-2.5 h-2.5 rounded-full flex-shrink-0 shadow-2xs" style={{ backgroundColor: item.color }} />
+                      <span className="text-slate-700 truncate font-semibold">{item.name}</span>
                     </div>
-                    <span className="text-slate-900 font-semibold whitespace-nowrap ml-2">
+                    <span className="text-slate-900 font-bold whitespace-nowrap ml-2">
                       {formatCurrency(item.value, settings.currency, false)}
                     </span>
                   </div>
@@ -403,15 +420,15 @@ export const OverviewDashboard: React.FC<OverviewDashboardProps> = ({
       {/* Two Columns: Recent Transactions & Active Budget Health */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Recent Transactions List */}
-        <div className="lg:col-span-2 bg-white p-5 rounded-2xl border border-slate-200/80 shadow-sm">
+        <div className="lg:col-span-2 bg-white/90 backdrop-blur-md p-5 sm:p-6 rounded-2xl border border-slate-200/70 shadow-[0_2px_16px_rgba(0,0,0,0.03)]">
           <div className="flex items-center justify-between mb-4">
             <div>
-              <h3 className="text-base font-bold text-slate-800">Recent Transactions</h3>
-              <p className="text-xs text-slate-500">Latest recorded activity</p>
+              <h3 className="text-base font-extrabold text-slate-900 tracking-tight">Recent Transactions</h3>
+              <p className="text-xs text-slate-400 font-medium">Latest recorded activity in ledger</p>
             </div>
             <button
               onClick={() => onNavigateToTab('transactions')}
-              className="text-xs font-semibold text-indigo-600 hover:text-indigo-800 flex items-center gap-1 transition"
+              className="text-xs font-bold text-indigo-600 hover:text-indigo-800 flex items-center gap-1 transition-all hover:translate-x-0.5"
             >
               <span>View All</span>
               <ChevronRight size={14} />
@@ -423,7 +440,7 @@ export const OverviewDashboard: React.FC<OverviewDashboardProps> = ({
               <p className="text-sm">No transactions found for this period.</p>
               <button
                 onClick={onOpenAddModal}
-                className="mt-3 px-4 py-2 bg-indigo-50 text-indigo-600 rounded-xl text-xs font-semibold hover:bg-indigo-100 transition"
+                className="mt-3 px-4 py-2 bg-indigo-50 text-indigo-600 rounded-xl text-xs font-bold hover:bg-indigo-100 transition shadow-2xs"
               >
                 + Add your first transaction
               </button>
@@ -437,11 +454,11 @@ export const OverviewDashboard: React.FC<OverviewDashboardProps> = ({
                   <div
                     key={tx.id}
                     onClick={() => onEditTransaction(tx)}
-                    className="py-3 flex items-center justify-between gap-3 hover:bg-slate-50/70 -mx-2 px-2 rounded-xl cursor-pointer transition"
+                    className="py-3 flex items-center justify-between gap-3 hover:bg-slate-50/80 -mx-2 px-3 rounded-xl cursor-pointer transition-colors duration-150"
                   >
                     <div className="flex items-center gap-3 min-w-0">
                       <div
-                        className="w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0"
+                        className="w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0 shadow-2xs"
                         style={{
                           backgroundColor: `${cat?.color || '#94a3b8'}20`,
                           color: cat?.color || '#64748b',
@@ -450,9 +467,9 @@ export const OverviewDashboard: React.FC<OverviewDashboardProps> = ({
                         <CategoryIcon name={cat?.icon || 'Tag'} size={18} />
                       </div>
                       <div className="min-w-0">
-                        <p className="text-sm font-semibold text-slate-800 truncate">{tx.title}</p>
+                        <p className="text-sm font-bold text-slate-800 truncate">{tx.title}</p>
                         <div className="flex items-center gap-2 text-xs text-slate-400">
-                          <span>{cat?.name || 'Uncategorized'}</span>
+                          <span className="font-medium text-slate-500">{cat?.name || 'Uncategorized'}</span>
                           <span>•</span>
                           <span>{formatDateDisplay(tx.date)}</span>
                         </div>
@@ -460,14 +477,14 @@ export const OverviewDashboard: React.FC<OverviewDashboardProps> = ({
                     </div>
                     <div className="text-right flex-shrink-0">
                       <p
-                        className={`text-sm font-bold ${
+                        className={`text-sm font-bold tracking-tight ${
                           isExpense ? 'text-slate-900' : 'text-emerald-600'
                         }`}
                       >
                         {isExpense ? '-' : '+'}
                         {formatCurrency(tx.amount, settings.currency, settings.showDecimals)}
                       </p>
-                      <span className="text-[10px] uppercase font-medium tracking-wider text-slate-400">
+                      <span className="text-[10px] uppercase font-bold tracking-wider text-slate-400">
                         {tx.paymentMethod.replace('_', ' ')}
                       </span>
                     </div>
@@ -479,16 +496,16 @@ export const OverviewDashboard: React.FC<OverviewDashboardProps> = ({
         </div>
 
         {/* Budget Health Overview */}
-        <div className="bg-white p-5 rounded-2xl border border-slate-200/80 shadow-sm flex flex-col justify-between">
+        <div className="bg-white/90 backdrop-blur-md p-5 sm:p-6 rounded-2xl border border-slate-200/70 shadow-[0_2px_16px_rgba(0,0,0,0.03)] flex flex-col justify-between">
           <div>
             <div className="flex items-center justify-between mb-4">
               <div>
-                <h3 className="text-base font-bold text-slate-800">Budget Progress</h3>
-                <p className="text-xs text-slate-500">Current Month Category Caps</p>
+                <h3 className="text-base font-extrabold text-slate-900 tracking-tight">Budget Progress</h3>
+                <p className="text-xs text-slate-400 font-medium">Monthly category limit tracker</p>
               </div>
               <button
                 onClick={() => onNavigateToTab('budgets')}
-                className="text-xs font-semibold text-indigo-600 hover:text-indigo-800 flex items-center gap-1 transition"
+                className="text-xs font-bold text-indigo-600 hover:text-indigo-800 flex items-center gap-1 transition-all hover:translate-x-0.5"
               >
                 <span>Manage</span>
                 <ChevronRight size={14} />
@@ -509,16 +526,16 @@ export const OverviewDashboard: React.FC<OverviewDashboardProps> = ({
                   return (
                     <div key={b.id} className="space-y-1.5">
                       <div className="flex justify-between items-center text-xs">
-                        <span className="font-semibold text-slate-700 truncate">
+                        <span className="font-bold text-slate-800 truncate">
                           {b.category?.name || 'Budget'}
                         </span>
-                        <span className="text-slate-500 font-medium">
+                        <span className="text-slate-500 font-semibold">
                           {formatCurrency(b.spent, settings.currency, false)} / {formatCurrency(b.monthlyLimit, settings.currency, false)}
                         </span>
                       </div>
-                      <div className="w-full h-2 bg-slate-100 rounded-full overflow-hidden">
+                      <div className="w-full h-2.5 bg-slate-100/90 rounded-full overflow-hidden p-0.5 border border-slate-200/50">
                         <div
-                          className={`h-full rounded-full transition-all duration-500 ${barColor}`}
+                          className={`h-full rounded-full transition-all duration-500 shadow-2xs ${barColor}`}
                           style={{ width: `${Math.min(b.percentage, 100)}%` }}
                         />
                       </div>

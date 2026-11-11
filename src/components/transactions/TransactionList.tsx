@@ -85,7 +85,7 @@ export const TransactionList: React.FC<TransactionListProps> = ({
   return (
     <div className="space-y-6">
       {/* Search & Filter Header Bar */}
-      <div className="bg-white p-4 sm:p-5 rounded-2xl border border-slate-200/80 shadow-sm space-y-4">
+      <div className="bg-white/90 backdrop-blur-md p-4 sm:p-5 rounded-2xl border border-slate-200/70 shadow-[0_2px_16px_rgba(0,0,0,0.03)] space-y-4">
         <div className="flex flex-col md:flex-row gap-3">
           {/* Search Box */}
           <div className="relative flex-1">
@@ -95,12 +95,12 @@ export const TransactionList: React.FC<TransactionListProps> = ({
               placeholder="Search by title, description, notes, or tags..."
               value={filters.searchQuery}
               onChange={(e) => setFilters((prev) => ({ ...prev, searchQuery: e.target.value }))}
-              className="w-full pl-10 pr-4 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs sm:text-sm outline-none focus:bg-white focus:border-indigo-500 transition font-medium"
+              className="w-full pl-10 pr-4 py-2 bg-slate-50/80 border border-slate-200/70 rounded-xl text-xs sm:text-sm outline-none focus:bg-white focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 transition-all font-medium"
             />
             {filters.searchQuery && (
               <button
                 onClick={() => setFilters((prev) => ({ ...prev, searchQuery: '' }))}
-                className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 transition"
               >
                 <X size={15} />
               </button>
@@ -111,27 +111,27 @@ export const TransactionList: React.FC<TransactionListProps> = ({
           <div className="flex items-center gap-2">
             <button
               onClick={onOpenCsvModal}
-              className="px-3.5 py-2 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border border-emerald-200/60 rounded-xl text-xs font-semibold flex items-center gap-1.5 transition"
+              className="px-3.5 py-2 bg-emerald-50/80 hover:bg-emerald-100/80 text-emerald-800 border border-emerald-200/60 rounded-xl text-xs font-bold flex items-center gap-1.5 shadow-2xs transition active:scale-95"
               title="Import bank statement CSV"
             >
-              <Upload size={15} />
+              <Upload size={14} />
               <span className="hidden sm:inline">Import Statement</span>
             </button>
 
             <button
               onClick={exportCSV}
-              className="px-3.5 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs font-semibold flex items-center gap-1.5 transition"
+              className="px-3.5 py-2 bg-slate-100/80 hover:bg-slate-200/70 text-slate-700 border border-slate-200/60 rounded-xl text-xs font-bold flex items-center gap-1.5 shadow-2xs transition active:scale-95"
               title="Export visible list to CSV"
             >
-              <FileSpreadsheet size={15} />
+              <FileSpreadsheet size={14} />
               <span className="hidden sm:inline">Export CSV</span>
             </button>
 
             <button
               onClick={onOpenAddModal}
-              className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-semibold flex items-center gap-1.5 shadow-sm shadow-indigo-200 transition"
+              className="px-4 py-2 bg-gradient-to-r from-indigo-600 to-violet-600 hover:from-indigo-500 hover:to-violet-500 text-white rounded-xl text-xs font-bold flex items-center gap-1.5 shadow-sm shadow-indigo-500/25 transition-all active:scale-95"
             >
-              <Plus size={15} />
+              <Plus size={15} strokeWidth={2.5} />
               <span>Add Transaction</span>
             </button>
           </div>
@@ -269,7 +269,7 @@ export const TransactionList: React.FC<TransactionListProps> = ({
       ) : (
         <div className="space-y-5">
           {groupedTransactions.map((group) => (
-            <div key={group.date} className="bg-white rounded-2xl border border-slate-200/80 shadow-sm overflow-hidden">
+            <div key={group.date} className="bg-white/90 backdrop-blur-md rounded-2xl border border-slate-200/70 shadow-[0_2px_16px_rgba(0,0,0,0.03)] overflow-hidden">
               {/* Date Group Header */}
               <div className="px-5 py-3 bg-slate-50/80 border-b border-slate-100 flex items-center justify-between text-xs">
                 <span className="font-bold text-slate-700 tracking-wide">{group.displayDate}</span>

@@ -119,16 +119,16 @@ export const AnalyticsReports: React.FC = () => {
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <h2 className="text-xl font-bold text-slate-800">Financial Insights & Reports</h2>
-          <p className="text-xs text-slate-500">
+          <h2 className="text-xl sm:text-2xl font-black tracking-tight text-slate-900">Financial Insights & Reports</h2>
+          <p className="text-xs text-slate-400 font-medium mt-0.5">
             Deep dive into spending behaviors, payment channels, and weekday patterns
           </p>
         </div>
         <button
           onClick={exportCSV}
-          className="px-4 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs sm:text-sm font-semibold flex items-center gap-2 transition self-start sm:self-auto"
+          className="px-4 py-2 bg-slate-100/90 hover:bg-slate-200/80 text-slate-800 border border-slate-200/70 rounded-xl text-xs sm:text-sm font-bold flex items-center gap-2 shadow-2xs transition active:scale-95 self-start sm:self-auto"
         >
-          <FileDown size={16} />
+          <FileDown size={15} />
           <span>Export CSV</span>
         </button>
       </div>
@@ -136,11 +136,11 @@ export const AnalyticsReports: React.FC = () => {
       {/* Top 2 Charts Grid */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* Payment Channels Pie */}
-        <div className="bg-white p-5 rounded-2xl border border-slate-200/80 shadow-sm flex flex-col">
+        <div className="bg-white/90 backdrop-blur-md p-5 sm:p-6 rounded-2xl border border-slate-200/70 shadow-[0_2px_16px_rgba(0,0,0,0.03)] flex flex-col">
           <div className="flex items-center justify-between mb-4">
             <div>
-              <h3 className="text-base font-bold text-slate-800">Payment Methods Breakdown</h3>
-              <p className="text-xs text-slate-500">Distribution across cards, transfers & cash</p>
+              <h3 className="text-base font-extrabold text-slate-900 tracking-tight">Payment Methods Breakdown</h3>
+              <p className="text-xs text-slate-400 font-medium">Distribution across cards, transfers & cash</p>
             </div>
             <CreditCard size={18} className="text-slate-400" />
           </div>
@@ -170,6 +170,15 @@ export const AnalyticsReports: React.FC = () => {
                     </Pie>
                     <Tooltip
                       formatter={(val: number) => formatCurrency(val, settings.currency, settings.showDecimals)}
+                      contentStyle={{ 
+                        borderRadius: '16px', 
+                        background: 'rgba(255, 255, 255, 0.96)', 
+                        backdropFilter: 'blur(16px)', 
+                        border: '1px solid rgba(226, 232, 240, 0.8)', 
+                        boxShadow: '0 12px 30px -4px rgba(0, 0, 0, 0.08)',
+                        fontWeight: 600,
+                        fontSize: '12px'
+                      }}
                     />
                   </PieChart>
                 </ResponsiveContainer>
@@ -177,12 +186,12 @@ export const AnalyticsReports: React.FC = () => {
 
               <div className="flex-1 w-full space-y-2">
                 {paymentMethodData.map((pm) => (
-                  <div key={pm.name} className="flex items-center justify-between text-xs">
+                  <div key={pm.name} className="flex items-center justify-between text-xs p-1 rounded-lg hover:bg-slate-50 transition">
                     <div className="flex items-center gap-2 truncate">
-                      <span className="w-2.5 h-2.5 rounded-full flex-shrink-0" style={{ backgroundColor: pm.color }} />
-                      <span className="text-slate-700 font-medium truncate">{pm.name}</span>
+                      <span className="w-2.5 h-2.5 rounded-full flex-shrink-0 shadow-2xs" style={{ backgroundColor: pm.color }} />
+                      <span className="text-slate-700 font-bold truncate">{pm.name}</span>
                     </div>
-                    <span className="text-slate-900 font-bold ml-2">
+                    <span className="text-slate-900 font-extrabold ml-2">
                       {formatCurrency(pm.value, settings.currency, false)}
                     </span>
                   </div>
@@ -193,23 +202,31 @@ export const AnalyticsReports: React.FC = () => {
         </div>
 
         {/* Day of the Week Pattern */}
-        <div className="bg-white p-5 rounded-2xl border border-slate-200/80 shadow-sm flex flex-col">
+        <div className="bg-white/90 backdrop-blur-md p-5 sm:p-6 rounded-2xl border border-slate-200/70 shadow-[0_2px_16px_rgba(0,0,0,0.03)] flex flex-col">
           <div className="flex items-center justify-between mb-4">
             <div>
-              <h3 className="text-base font-bold text-slate-800">Weekday Spending Heat</h3>
-              <p className="text-xs text-slate-500">Identify which days of the week incur the most cost</p>
+              <h3 className="text-base font-extrabold text-slate-900 tracking-tight">Weekday Spending Heat</h3>
+              <p className="text-xs text-slate-400 font-medium">Identify which days of the week incur the most cost</p>
             </div>
             <Calendar size={18} className="text-slate-400" />
           </div>
 
           <div className="h-56 w-full">
             <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={dayOfWeekData} margin={{ top: 10, right: 10, left: -15, bottom: 0 }}>
+              <BarChart data={dayOfWeekData} margin={{ top: 10, right: 10, left: -22, bottom: 0 }}>
                 <XAxis dataKey="day" stroke="#94a3b8" fontSize={11} tickLine={false} />
                 <YAxis stroke="#94a3b8" fontSize={11} tickLine={false} />
                 <Tooltip
                   formatter={(val: number) => formatCurrency(val, settings.currency, settings.showDecimals)}
-                  contentStyle={{ borderRadius: '12px', border: '1px solid #e2e8f0' }}
+                  contentStyle={{ 
+                    borderRadius: '16px', 
+                    background: 'rgba(255, 255, 255, 0.96)', 
+                    backdropFilter: 'blur(16px)', 
+                    border: '1px solid rgba(226, 232, 240, 0.8)', 
+                    boxShadow: '0 12px 30px -4px rgba(0, 0, 0, 0.08)',
+                    fontWeight: 600,
+                    fontSize: '12px'
+                  }}
                 />
                 <Bar dataKey="amount" name="Total Spent" fill="#6366f1" radius={[6, 6, 0, 0]} maxBarSize={36} />
               </BarChart>
@@ -219,7 +236,7 @@ export const AnalyticsReports: React.FC = () => {
       </div>
 
       {/* Comprehensive Category Breakdown Table */}
-      <div className="bg-white rounded-2xl border border-slate-200/80 shadow-sm overflow-hidden">
+      <div className="bg-white/90 backdrop-blur-md rounded-2xl border border-slate-200/70 shadow-[0_2px_16px_rgba(0,0,0,0.03)] overflow-hidden">
         <div className="p-5 border-b border-slate-100 flex items-center justify-between">
           <div>
             <h3 className="text-base font-bold text-slate-800">Category Analytics Matrix</h3>

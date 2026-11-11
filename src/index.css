@@ -12,6 +12,13 @@
   body {
     overscroll-behavior-y: none;
     -webkit-font-smoothing: antialiased;
+    background-color: #f8fafc;
+    color: #0f172a;
+  }
+
+  ::selection {
+    background-color: #e0e7ff;
+    color: #4338ca;
   }
 
   /* Prevent iOS Safari from zooming into form fields on focus */
@@ -33,6 +40,22 @@
     scrollbar-width: none;  /* Firefox */
   }
 
+  /* Custom subtle scrollbar */
+  .custom-scrollbar::-webkit-scrollbar {
+    width: 5px;
+    height: 5px;
+  }
+  .custom-scrollbar::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  .custom-scrollbar::-webkit-scrollbar-thumb {
+    background: #cbd5e1;
+    border-radius: 9999px;
+  }
+  .custom-scrollbar::-webkit-scrollbar-thumb:hover {
+    background: #94a3b8;
+  }
+
   /* Safe Area Inset Utilities for iOS & Android with Notches / Home Indicators */
   .pt-safe {
     padding-top: env(safe-area-inset-top, 0px);
@@ -51,15 +74,15 @@
 @keyframes fadeIn {
   from {
     opacity: 0;
-    transform: scale(0.98);
+    transform: scale(0.97) translateY(4px);
   }
   to {
     opacity: 1;
-    transform: scale(1);
+    transform: scale(1) translateY(0);
   }
 }
 
 .animate-fade-in {
-  animation: fadeIn 0.18s ease-out forwards;
+  animation: fadeIn 0.22s cubic-bezier(0.16, 1, 0.3, 1) forwards;
 }
 

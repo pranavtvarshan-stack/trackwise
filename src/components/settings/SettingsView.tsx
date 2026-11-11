@@ -195,7 +195,7 @@ export const SettingsView: React.FC = () => {
       )}
 
       {/* 1. General Preferences */}
-      <div className="bg-white p-5 rounded-2xl border border-slate-200/80 shadow-sm space-y-4">
+      <div className="bg-white/90 backdrop-blur-md p-5 sm:p-6 rounded-2xl border border-slate-200/70 shadow-[0_2px_16px_rgba(0,0,0,0.03)] space-y-4">
         <div className="flex items-center gap-2.5 pb-3 border-b border-slate-100">
           <Coins className="text-indigo-600" size={18} />
           <h3 className="text-sm font-bold text-slate-800">Currency & Formatting</h3>
@@ -237,7 +237,7 @@ export const SettingsView: React.FC = () => {
       </div>
 
       {/* 2. Custom Category Manager */}
-      <div className="bg-white p-5 rounded-2xl border border-slate-200/80 shadow-sm space-y-5">
+      <div className="bg-white/90 backdrop-blur-md p-5 sm:p-6 rounded-2xl border border-slate-200/70 shadow-[0_2px_16px_rgba(0,0,0,0.03)] space-y-5">
         <div className="flex items-center gap-2.5 pb-3 border-b border-slate-100">
           <Tags className="text-indigo-600" size={18} />
           <div>
@@ -369,7 +369,7 @@ export const SettingsView: React.FC = () => {
       </div>
 
       {/* 3. Payment Methods Manager */}
-      <div className="bg-white p-5 rounded-2xl border border-slate-200/80 shadow-sm space-y-5">
+      <div className="bg-white/90 backdrop-blur-md p-5 sm:p-6 rounded-2xl border border-slate-200/70 shadow-[0_2px_16px_rgba(0,0,0,0.03)] space-y-5">
         <div className="flex items-center gap-2.5 pb-3 border-b border-slate-100">
           <CreditCard className="text-indigo-600" size={18} />
           <div>
@@ -602,8 +602,8 @@ export const SettingsView: React.FC = () => {
         </div>
       )}
 
-      {/* 3. Data Backup, Restore & Danger Zone */}
-      <div className="bg-white p-5 rounded-2xl border border-slate-200/80 shadow-sm space-y-4">
+      {/* 4. Data Backup, Restore & Danger Zone */}
+      <div className="bg-white/90 backdrop-blur-md p-5 sm:p-6 rounded-2xl border border-slate-200/70 shadow-[0_2px_16px_rgba(0,0,0,0.03)] space-y-4">
         <div className="flex items-center gap-2.5 pb-3 border-b border-slate-100">
           <Database className="text-indigo-600" size={18} />
           <div>
@@ -615,7 +615,7 @@ export const SettingsView: React.FC = () => {
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
           <button
             onClick={exportCSV}
-            className="p-3.5 border border-slate-200 rounded-xl hover:bg-slate-50 flex flex-col items-center justify-center text-center gap-1.5 transition"
+            className="p-4 border border-slate-200/80 rounded-2xl bg-white hover:bg-slate-50/80 hover:border-slate-300 shadow-2xs hover:shadow-xs flex flex-col items-center justify-center text-center gap-1.5 transition-all active:scale-95"
           >
             <Download size={18} className="text-slate-600" />
             <span className="text-xs font-bold text-slate-800">Export CSV</span>
@@ -624,7 +624,7 @@ export const SettingsView: React.FC = () => {
 
           <button
             onClick={exportJSON}
-            className="p-3.5 border border-slate-200 rounded-xl hover:bg-slate-50 flex flex-col items-center justify-center text-center gap-1.5 transition"
+            className="p-4 border border-slate-200/80 rounded-2xl bg-white hover:bg-slate-50/80 hover:border-slate-300 shadow-2xs hover:shadow-xs flex flex-col items-center justify-center text-center gap-1.5 transition-all active:scale-95"
           >
             <Download size={18} className="text-slate-600" />
             <span className="text-xs font-bold text-slate-800">Backup All (JSON)</span>
@@ -633,7 +633,7 @@ export const SettingsView: React.FC = () => {
 
           <button
             onClick={() => fileInputRef.current?.click()}
-            className="p-3.5 border border-slate-200 rounded-xl hover:bg-slate-50 flex flex-col items-center justify-center text-center gap-1.5 transition"
+            className="p-4 border border-slate-200/80 rounded-2xl bg-white hover:bg-slate-50/80 hover:border-slate-300 shadow-2xs hover:shadow-xs flex flex-col items-center justify-center text-center gap-1.5 transition-all active:scale-95"
           >
             <Upload size={18} className="text-indigo-600" />
             <span className="text-xs font-bold text-slate-800">Restore from JSON</span>

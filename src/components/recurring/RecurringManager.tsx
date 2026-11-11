@@ -136,11 +136,11 @@ export const RecurringManager: React.FC = () => {
 
       {/* KPI Cards */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-        <div className="bg-white p-5 rounded-2xl border border-slate-200/80 shadow-sm">
-          <span className="text-xs font-semibold text-slate-400 uppercase tracking-wider block mb-1">
+        <div className="bg-white/90 backdrop-blur-md p-5 rounded-2xl border border-slate-200/70 shadow-[0_2px_16px_rgba(0,0,0,0.03)] hover:shadow-md transition-all duration-200 hover:-translate-y-0.5">
+          <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider block mb-1">
             Monthly Fixed Expenses
           </span>
-          <div className="text-2xl font-bold text-rose-600">
+          <div className="text-2xl font-black tracking-tight text-rose-600">
             {formatCurrency(monthlyRecurringExpense, settings.currency, settings.showDecimals)}
           </div>
           <div className="mt-2 text-xs text-slate-500 font-medium">
@@ -148,11 +148,11 @@ export const RecurringManager: React.FC = () => {
           </div>
         </div>
 
-        <div className="bg-white p-5 rounded-2xl border border-slate-200/80 shadow-sm">
-          <span className="text-xs font-semibold text-slate-400 uppercase tracking-wider block mb-1">
+        <div className="bg-white/90 backdrop-blur-md p-5 rounded-2xl border border-slate-200/70 shadow-[0_2px_16px_rgba(0,0,0,0.03)] hover:shadow-md transition-all duration-200 hover:-translate-y-0.5">
+          <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider block mb-1">
             Monthly Recurring Income
           </span>
-          <div className="text-2xl font-bold text-emerald-600">
+          <div className="text-2xl font-black tracking-tight text-emerald-600">
             {formatCurrency(monthlyRecurringIncome, settings.currency, settings.showDecimals)}
           </div>
           <div className="mt-2 text-xs text-slate-500 font-medium">
@@ -160,11 +160,11 @@ export const RecurringManager: React.FC = () => {
           </div>
         </div>
 
-        <div className="bg-white p-5 rounded-2xl border border-slate-200/80 shadow-sm">
-          <span className="text-xs font-semibold text-slate-400 uppercase tracking-wider block mb-1">
+        <div className="bg-white/90 backdrop-blur-md p-5 rounded-2xl border border-slate-200/70 shadow-[0_2px_16px_rgba(0,0,0,0.03)] hover:shadow-md transition-all duration-200 hover:-translate-y-0.5">
+          <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider block mb-1">
             Due & Upcoming
           </span>
-          <div className="text-2xl font-bold text-slate-900 flex items-center gap-2">
+          <div className="text-2xl font-black tracking-tight text-slate-900 flex items-center gap-2">
             <span>{dueItems.length} Due</span>
           </div>
           <div className="mt-2 text-xs text-slate-500 font-medium">
