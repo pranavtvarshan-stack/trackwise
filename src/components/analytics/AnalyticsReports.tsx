@@ -1,0 +1,290 @@
+import React, { useMemo } from 'react';
+import { 
+  BarChart3, 
+  PieChart as PieChartIcon, 
+  CreditCard, 
+  TrendingUp, 
+  Calendar,
+  FileDown
+} from 'lucide-react';
+import { useExpense } from '../../context/ExpenseContext';
+import { formatCurrency, formatPercentage } from '../../utils/formatters';
+import { PAYMENT_METHODS } from '../../constants/defaults';
+import { CategoryIcon } from '../common/CategoryIcon';
+import { 
+  ResponsiveContainer, 
+  BarChart, 
+  Bar, 
+  XAxis, 
+  YAxis, 
+  Tooltip, 
+  PieChart, 
+  Pie, 
+  Cell,
+  LineChart,
+  Line,
+  CartesianGrid
+} from 'recharts';
+import { format, parseISO, getDay } from 'date-fns';
+
+const DAYS_OF_WEEK = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+
+export const AnalyticsReports: React.FC = () => {
+  const { filteredTransactions, categories, paymentMethods, settings, totalExpenses, totalIncome, exportCSV } = useExpense();
+
+  const categoryMap = useMemo(() => {
+    return new Map(categories.map((c) => [c.id, c]));
+  }, [categories]);
+
+  // Category detailed breakdown stats
+  const categoryStats = useMemo(() => {
+    const map: Record<string, { count: number; total: number }> = {};
+    filteredTransactions
+      .filter((t) => t.type === 'expense')
+      .forEach((t) => {
+        if (!map[t.categoryId]) {
+          map[t.categoryId] = { count: 0, total: 0 };
+        }
+        map[t.categoryId].count++;
+        map[t.categoryId].total += t.amount;
+      });
+
+    return Object.entries(map)
+      .map(([catId, data]) => {
+        const cat = categoryMap.get(catId);
+        const percent = totalExpenses > 0 ? (data.total / totalExpenses) * 100 : 0;
+        return {
+          catId,
+          name: cat?.name || 'Other',
+          icon: cat?.icon || 'Tag',
+          color: cat?.color || '#64748b',
+          total: data.total,
+          count: data.count,
+          average: data.total / data.count,
+          percentage: percent,
+        };
+      })
+      .sort((a, b) => b.total - a.total);
+  }, [filteredTransactions, categoryMap, totalExpenses]);
+
+  // Payment method distribution
+  const paymentMethodData = useMemo(() => {
+    const map: Record<string, number> = {};
+    filteredTransactions
+      .filter((t) => t.type === 'expense')
+      .forEach((t) => {
+        map[t.paymentMethod] = (map[t.paymentMethod] || 0) + t.amount;
+      });
+
+    const colors = ['#6366f1', '#10b981', '#f59e0b', '#ec4899', '#06b6d4', '#8b5cf6', '#ef4444', '#64748b'];
+
+    return Object.entries(map)
+      .map(([pmId, amount], idx) => {
+        const pm = paymentMethods.find((p) => p.id === pmId);
+        return {
+          name: pm?.label || pmId,
+          value: Math.round(amount * 100) / 100,
+          color: colors[idx % colors.length],
+        };
+      })
+      .sort((a, b) => b.value - a.value);
+  }, [filteredTransactions, paymentMethods]);
+
+  // Day of week spending analysis
+  const dayOfWeekData = useMemo(() => {
+    const daysTotal = [0, 0, 0, 0, 0, 0, 0];
+    const daysCount = [0, 0, 0, 0, 0, 0, 0];
+
+    filteredTransactions
+      .filter((t) => t.type === 'expense')
+      .forEach((t) => {
+        try {
+          const dayIdx = getDay(parseISO(t.date));
+          daysTotal[dayIdx] += t.amount;
+          daysCount[dayIdx]++;
+        } catch {
+          // ignore
+        }
+      });
+
+    return DAYS_OF_WEEK.map((name, idx) => ({
+      day: name,
+      amount: Math.round(daysTotal[idx] * 100) / 100,
+      count: daysCount[idx],
+    }));
+  }, [filteredTransactions]);
+
+  return (
+    <div className="space-y-6">
+      {/* Header */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+        <div>
+          <h2 className="text-xl font-bold text-slate-800">Financial Insights & Reports</h2>
+          <p className="text-xs text-slate-500">
+            Deep dive into spending behaviors, payment channels, and weekday patterns
+          </p>
+        </div>
+        <button
+          onClick={exportCSV}
+          className="px-4 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs sm:text-sm font-semibold flex items-center gap-2 transition self-start sm:self-auto"
+        >
+          <FileDown size={16} />
+          <span>Export CSV</span>
+        </button>
+      </div>
+
+      {/* Top 2 Charts Grid */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        {/* Payment Channels Pie */}
+        <div className="bg-white p-5 rounded-2xl border border-slate-200/80 shadow-sm flex flex-col">
+          <div className="flex items-center justify-between mb-4">
+            <div>
+              <h3 className="text-base font-bold text-slate-800">Payment Methods Breakdown</h3>
+              <p className="text-xs text-slate-500">Distribution across cards, transfers & cash</p>
+            </div>
+            <CreditCard size={18} className="text-slate-400" />
+          </div>
+
+          {paymentMethodData.length === 0 ? (
+            <div className="flex-1 flex items-center justify-center p-8 text-center text-slate-400 text-xs">
+              No expense transactions to show
+            </div>
+          ) : (
+            <div className="flex flex-col sm:flex-row items-center gap-4">
+              <div className="h-52 w-52 relative flex-shrink-0">
+                <ResponsiveContainer width="100%" height="100%">
+                  <PieChart>
+                    <Pie
+                      data={paymentMethodData}
+                      dataKey="value"
+                      nameKey="name"
+                      cx="50%"
+                      cy="50%"
+                      innerRadius={45}
+                      outerRadius={75}
+                      paddingAngle={3}
+                    >
+                      {paymentMethodData.map((entry, index) => (
+                        <Cell key={`cell-pm-${index}`} fill={entry.color} />
+                      ))}
+                    </Pie>
+                    <Tooltip
+                      formatter={(val: number) => formatCurrency(val, settings.currency, settings.showDecimals)}
+                    />
+                  </PieChart>
+                </ResponsiveContainer>
+              </div>
+
+              <div className="flex-1 w-full space-y-2">
+                {paymentMethodData.map((pm) => (
+                  <div key={pm.name} className="flex items-center justify-between text-xs">
+                    <div className="flex items-center gap-2 truncate">
+                      <span className="w-2.5 h-2.5 rounded-full flex-shrink-0" style={{ backgroundColor: pm.color }} />
+                      <span className="text-slate-700 font-medium truncate">{pm.name}</span>
+                    </div>
+                    <span className="text-slate-900 font-bold ml-2">
+                      {formatCurrency(pm.value, settings.currency, false)}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* Day of the Week Pattern */}
+        <div className="bg-white p-5 rounded-2xl border border-slate-200/80 shadow-sm flex flex-col">
+          <div className="flex items-center justify-between mb-4">
+            <div>
+              <h3 className="text-base font-bold text-slate-800">Weekday Spending Heat</h3>
+              <p className="text-xs text-slate-500">Identify which days of the week incur the most cost</p>
+            </div>
+            <Calendar size={18} className="text-slate-400" />
+          </div>
+
+          <div className="h-56 w-full">
+            <ResponsiveContainer width="100%" height="100%">
+              <BarChart data={dayOfWeekData} margin={{ top: 10, right: 10, left: -15, bottom: 0 }}>
+                <XAxis dataKey="day" stroke="#94a3b8" fontSize={11} tickLine={false} />
+                <YAxis stroke="#94a3b8" fontSize={11} tickLine={false} />
+                <Tooltip
+                  formatter={(val: number) => formatCurrency(val, settings.currency, settings.showDecimals)}
+                  contentStyle={{ borderRadius: '12px', border: '1px solid #e2e8f0' }}
+                />
+                <Bar dataKey="amount" name="Total Spent" fill="#6366f1" radius={[6, 6, 0, 0]} maxBarSize={36} />
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
+        </div>
+      </div>
+
+      {/* Comprehensive Category Breakdown Table */}
+      <div className="bg-white rounded-2xl border border-slate-200/80 shadow-sm overflow-hidden">
+        <div className="p-5 border-b border-slate-100 flex items-center justify-between">
+          <div>
+            <h3 className="text-base font-bold text-slate-800">Category Analytics Matrix</h3>
+            <p className="text-xs text-slate-500">Totals, volume, and average order value per category</p>
+          </div>
+          <span className="text-xs font-semibold text-slate-500 bg-slate-100 px-3 py-1 rounded-full">
+            {categoryStats.length} Categories Active
+          </span>
+        </div>
+
+        {categoryStats.length === 0 ? (
+          <div className="p-8 text-center text-slate-400 text-xs">
+            No expenses found in the selected period.
+          </div>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full text-left border-collapse text-xs">
+              <thead>
+                <tr className="bg-slate-50 border-b border-slate-200 text-slate-500 font-semibold uppercase tracking-wider">
+                  <th className="py-3 px-5">Category</th>
+                  <th className="py-3 px-4 text-right">Transactions</th>
+                  <th className="py-3 px-4 text-right">Total Spent</th>
+                  <th className="py-3 px-4 text-right">Average / Tx</th>
+                  <th className="py-3 px-5 text-right">% of Total</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100">
+                {categoryStats.map((item) => (
+                  <tr key={item.catId} className="hover:bg-slate-50/70 transition">
+                    <td className="py-3.5 px-5">
+                      <div className="flex items-center gap-3">
+                        <div
+                          className="w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0"
+                          style={{
+                            backgroundColor: `${item.color}20`,
+                            color: item.color,
+                          }}
+                        >
+                          <CategoryIcon name={item.icon} size={15} />
+                        </div>
+                        <span className="font-bold text-slate-800">{item.name}</span>
+                      </div>
+                    </td>
+                    <td className="py-3.5 px-4 text-right text-slate-600 font-medium">
+                      {item.count}
+                    </td>
+                    <td className="py-3.5 px-4 text-right font-bold text-slate-900">
+                      {formatCurrency(item.total, settings.currency, settings.showDecimals)}
+                    </td>
+                    <td className="py-3.5 px-4 text-right text-slate-600 font-medium">
+                      {formatCurrency(item.average, settings.currency, settings.showDecimals)}
+                    </td>
+                    <td className="py-3.5 px-5 text-right">
+                      <span className="inline-block px-2 py-0.5 bg-indigo-50 text-indigo-700 font-bold rounded-md">
+                        {formatPercentage(item.percentage)}
+                      </span>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+};
+
