@@ -111,14 +111,14 @@ export const RecurringModal: React.FC<RecurringModalProps> = ({
 
   return (
     <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4 bg-slate-900/60 backdrop-blur-sm animate-fade-in">
-      <div className="bg-white rounded-t-3xl sm:rounded-2xl shadow-2xl max-w-lg w-full max-h-[92dvh] sm:max-h-[88vh] flex flex-col overflow-hidden border border-slate-100 pb-safe sm:pb-0">
-        <div className="flex items-center justify-between px-5 sm:px-6 py-3.5 sm:py-4 border-b border-slate-100">
-          <h2 className="text-base sm:text-xl font-bold text-slate-800">
+      <div className="bg-white dark:bg-slate-900 rounded-t-3xl sm:rounded-2xl shadow-2xl max-w-lg w-full max-h-[92dvh] sm:max-h-[88vh] flex flex-col overflow-hidden border border-slate-100 dark:border-slate-800 pb-safe sm:pb-0">
+        <div className="flex items-center justify-between px-5 sm:px-6 py-3.5 sm:py-4 border-b border-slate-100 dark:border-slate-800">
+          <h2 className="text-base sm:text-xl font-bold text-slate-800 dark:text-white">
             {recurringToEdit ? 'Edit Recurring / Subscription' : 'Add Recurring Payment / Income'}
           </h2>
           <button
             onClick={onClose}
-            className="p-1.5 sm:p-2 text-slate-400 hover:text-slate-600 rounded-lg hover:bg-slate-100 transition"
+            className="p-1.5 sm:p-2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 transition"
           >
             <X size={19} />
           </button>
@@ -126,24 +126,24 @@ export const RecurringModal: React.FC<RecurringModalProps> = ({
 
         <form onSubmit={handleSubmit} className="p-4 sm:p-6 overflow-y-auto space-y-4 flex-1">
           {error && (
-            <div className="p-3 text-sm text-rose-700 bg-rose-50 border border-rose-200 rounded-xl">
+            <div className="p-3 text-sm text-rose-700 dark:text-rose-300 bg-rose-50 dark:bg-rose-950/60 border border-rose-200 dark:border-rose-900/60 rounded-xl">
               {error}
             </div>
           )}
 
           {/* Type Toggle */}
           <div>
-            <label className="block text-xs font-semibold uppercase tracking-wider text-slate-500 mb-1.5">
+            <label className="block text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400 mb-1.5">
               Type
             </label>
-            <div className="grid grid-cols-2 gap-2 p-1 bg-slate-100 rounded-xl">
+            <div className="grid grid-cols-2 gap-2 p-1 bg-slate-100 dark:bg-slate-800 rounded-xl">
               <button
                 type="button"
                 onClick={() => setType('expense')}
                 className={`py-2 text-sm font-semibold rounded-lg transition-all ${
                   type === 'expense'
                     ? 'bg-rose-500 text-white shadow-sm'
-                    : 'text-slate-600 hover:text-slate-900'
+                    : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
                 }`}
               >
                 Recurring Bill (-)
@@ -154,7 +154,7 @@ export const RecurringModal: React.FC<RecurringModalProps> = ({
                 className={`py-2 text-sm font-semibold rounded-lg transition-all ${
                   type === 'income'
                     ? 'bg-emerald-500 text-white shadow-sm'
-                    : 'text-slate-600 hover:text-slate-900'
+                    : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
                 }`}
               >
                 Recurring Income (+)
@@ -163,7 +163,7 @@ export const RecurringModal: React.FC<RecurringModalProps> = ({
           </div>
 
           <div>
-            <label className="block text-xs font-semibold uppercase tracking-wider text-slate-500 mb-1.5">
+            <label className="block text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400 mb-1.5">
               Title / Subscription Name *
             </label>
             <input
@@ -171,14 +171,14 @@ export const RecurringModal: React.FC<RecurringModalProps> = ({
               placeholder="e.g. Netflix, Rent, Gym, Cloud Hosting"
               value={title}
               onChange={(e) => setTitle(e.target.value)}
-              className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-slate-800 font-medium text-sm outline-none focus:bg-white focus:border-indigo-500"
+              className="w-full px-3.5 py-2.5 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-slate-800 dark:text-white font-medium text-sm outline-none focus:bg-white dark:focus:bg-slate-800 focus:border-indigo-500"
               required
             />
           </div>
 
           <div className="grid grid-cols-2 gap-4">
             <div>
-              <label className="block text-xs font-semibold uppercase tracking-wider text-slate-500 mb-1.5">
+              <label className="block text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400 mb-1.5">
                 Amount ({settings.currency.symbol}) *
               </label>
               <input
@@ -187,19 +187,19 @@ export const RecurringModal: React.FC<RecurringModalProps> = ({
                 placeholder="0.00"
                 value={amount}
                 onChange={(e) => setAmount(e.target.value)}
-                className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-slate-800 font-bold text-base outline-none focus:bg-white focus:border-indigo-500"
+                className="w-full px-3.5 py-2.5 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-slate-800 dark:text-white font-bold text-base outline-none focus:bg-white dark:focus:bg-slate-800 focus:border-indigo-500"
                 required
               />
             </div>
 
             <div>
-              <label className="block text-xs font-semibold uppercase tracking-wider text-slate-500 mb-1.5">
+              <label className="block text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400 mb-1.5">
                 Frequency *
               </label>
               <select
                 value={frequency}
                 onChange={(e) => setFrequency(e.target.value as any)}
-                className="w-full px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-slate-800 text-sm outline-none font-medium"
+                className="w-full px-3 py-2.5 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-slate-800 dark:text-white text-sm outline-none font-medium"
               >
                 <option value="daily">Daily</option>
                 <option value="weekly">Weekly</option>
@@ -211,13 +211,13 @@ export const RecurringModal: React.FC<RecurringModalProps> = ({
 
           <div className="grid grid-cols-2 gap-4">
             <div>
-              <label className="block text-xs font-semibold uppercase tracking-wider text-slate-500 mb-1.5">
+              <label className="block text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400 mb-1.5">
                 Category *
               </label>
               <select
                 value={categoryId}
                 onChange={(e) => setCategoryId(e.target.value)}
-                className="w-full px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-slate-800 text-sm outline-none font-medium"
+                className="w-full px-3.5 py-2.5 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-slate-800 dark:text-white text-sm outline-none font-medium"
               >
                 {availableCategories.map((c) => (
                   <option key={c.id} value={c.id}>
@@ -228,27 +228,27 @@ export const RecurringModal: React.FC<RecurringModalProps> = ({
             </div>
 
             <div>
-              <label className="block text-xs font-semibold uppercase tracking-wider text-slate-500 mb-1.5">
+              <label className="block text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400 mb-1.5">
                 Next Due Date *
               </label>
               <input
                 type="date"
                 value={nextDueDate}
                 onChange={(e) => setNextDueDate(e.target.value)}
-                className="w-full px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-slate-800 text-sm outline-none font-medium"
+                className="w-full px-3.5 py-2.5 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-slate-800 dark:text-white text-sm outline-none font-medium"
                 required
               />
             </div>
           </div>
 
           <div>
-            <label className="block text-xs font-semibold uppercase tracking-wider text-slate-500 mb-1.5">
+            <label className="block text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400 mb-1.5">
               Payment Method
             </label>
             <select
               value={paymentMethod}
               onChange={(e) => setPaymentMethod(e.target.value as PaymentMethod)}
-              className="w-full px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-slate-800 text-sm outline-none font-medium"
+              className="w-full px-3.5 py-2.5 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-slate-800 dark:text-white text-sm outline-none font-medium"
             >
               {paymentMethods.map((pm) => (
                 <option key={pm.id} value={pm.id}>
@@ -259,7 +259,7 @@ export const RecurringModal: React.FC<RecurringModalProps> = ({
           </div>
 
           <div>
-            <label className="block text-xs font-semibold uppercase tracking-wider text-slate-500 mb-1.5">
+            <label className="block text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400 mb-1.5">
               Notes
             </label>
             <input
@@ -267,21 +267,21 @@ export const RecurringModal: React.FC<RecurringModalProps> = ({
               placeholder="e.g. Account number, contract expiration date"
               value={notes}
               onChange={(e) => setNotes(e.target.value)}
-              className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-slate-800 text-xs outline-none focus:bg-white focus:border-indigo-500"
+              className="w-full px-3.5 py-2.5 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-slate-800 dark:text-white text-xs outline-none focus:bg-white dark:focus:bg-slate-800 focus:border-indigo-500"
             />
           </div>
 
-          <div className="pt-3 flex items-center justify-end gap-3 border-t border-slate-100">
+          <div className="pt-3 flex items-center justify-end gap-3 border-t border-slate-100 dark:border-slate-800">
             <button
               type="button"
               onClick={onClose}
-              className="px-4 py-2.5 text-sm font-semibold text-slate-600 hover:text-slate-800 hover:bg-slate-100 rounded-xl transition"
+              className="px-4 py-2.5 text-sm font-semibold text-slate-600 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-xl transition"
             >
               Cancel
             </button>
             <button
               type="submit"
-              className="px-6 py-2.5 text-sm font-semibold text-white bg-indigo-600 hover:bg-indigo-700 rounded-xl shadow-md shadow-indigo-200 hover:shadow-lg transition"
+              className="px-6 py-2.5 text-sm font-semibold text-white bg-indigo-600 hover:bg-indigo-700 rounded-xl shadow-md shadow-indigo-200 dark:shadow-none hover:shadow-lg transition"
             >
               {recurringToEdit ? 'Save Changes' : 'Add Subscription'}
             </button>
@@ -291,4 +291,3 @@ export const RecurringModal: React.FC<RecurringModalProps> = ({
     </div>
   );
 };
-

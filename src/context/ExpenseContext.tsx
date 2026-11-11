@@ -91,6 +91,8 @@ interface ExpenseContextType {
 
   // Actions - Settings & Filters
   updateSettings: (data: Partial<UserSettings>) => void;
+  toggleTheme: () => void;
+  isDark: boolean;
   setFilters: React.Dispatch<React.SetStateAction<FilterState>>;
   resetFilters: () => void;
   
@@ -126,9 +128,58 @@ export const ExpenseProvider: React.FC<{ children: React.ReactNode }> = ({ child
   const [settings, setSettings] = useState<UserSettings>(getStoredSettings);
   const [filters, setFilters] = useState<FilterState>(defaultFilters);
   const [isExportModalOpen, setIsExportModalOpen] = useState(false);
+  const [isDark, setIsDark] = useState<boolean>(() => {
+    if (typeof window === 'undefined') return false;
+    const stored = getStoredSettings();
+    if (stored.theme === 'dark') return true;
+    if (stored.theme === 'light') return false;
+    return window.matchMedia('(prefers-color-scheme: dark)').matches;
+  });
 
   const openExportModal = () => setIsExportModalOpen(true);
   const closeExportModal = () => setIsExportModalOpen(false);
+
+  // Sync theme to document.documentElement
+  useEffect(() => {
+    const root = document.documentElement;
+    const checkDark = () => {
+      if (settings.theme === 'dark') return true;
+      if (settings.theme === 'light') return false;
+      return window.matchMedia('(prefers-color-scheme: dark)').matches;
+    };
+
+    const shouldBeDark = checkDark();
+    setIsDark(shouldBeDark);
+    if (shouldBeDark) {
+      root.classList.add('dark');
+    } else {
+      root.classList.remove('dark');
+    }
+
+    if (settings.theme === 'system') {
+      const mediaQuery = window.matchMedia('(prefers-color-scheme: dark)');
+      const listener = (e: MediaQueryListEvent) => {
+        setIsDark(e.matches);
+        if (e.matches) {
+          root.classList.add('dark');
+        } else {
+          root.classList.remove('dark');
+        }
+      };
+      mediaQuery.addEventListener('change', listener);
+      return () => mediaQuery.removeEventListener('change', listener);
+    }
+  }, [settings.theme]);
+
+  const toggleTheme = () => {
+    setSettings((prev) => {
+      const currentIsDark =
+        prev.theme === 'dark' ||
+        (prev.theme === 'system' && window.matchMedia('(prefers-color-scheme: dark)').matches);
+      const nextTheme = currentIsDark ? 'light' : 'dark';
+      return { ...prev, theme: nextTheme };
+    });
+  };
 
   // Sync to storage whenever state changes
   useEffect(() => {
@@ -551,6 +602,8 @@ export const ExpenseProvider: React.FC<{ children: React.ReactNode }> = ({ child
         deleteRecurring,
         processDueRecurring,
         updateSettings,
+        toggleTheme,
+        isDark,
         setFilters,
         resetFilters,
         resetData,

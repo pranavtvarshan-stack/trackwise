@@ -7,7 +7,9 @@ import {
   Bell, 
   ChevronDown, 
   RotateCcw,
-  Sparkles
+  Sparkles,
+  Sun,
+  Moon
 } from 'lucide-react';
 import { useExpense } from '../../context/ExpenseContext';
 import { CURRENCIES } from '../../constants/defaults';
@@ -29,7 +31,9 @@ export const Header: React.FC<HeaderProps> = ({ onOpenAddModal, onNavigateToTab,
     exportJSON, 
     exportCSV, 
     importJSON,
-    resetData 
+    resetData,
+    isDark,
+    toggleTheme
   } = useExpense();
 
   const [showExportMenu, setShowExportMenu] = useState(false);
@@ -63,7 +67,7 @@ export const Header: React.FC<HeaderProps> = ({ onOpenAddModal, onNavigateToTab,
   };
 
   return (
-    <header className="sticky top-0 z-30 bg-white/80 backdrop-blur-xl border-b border-slate-200/60 shadow-[0_1px_2px_rgba(0,0,0,0.03)] pt-safe transition-all">
+    <header className="sticky top-0 z-30 bg-white/80 dark:bg-slate-900/80 backdrop-blur-xl border-b border-slate-200/60 dark:border-slate-800/80 shadow-[0_1px_2px_rgba(0,0,0,0.03)] pt-safe transition-all">
       <div className="max-w-7xl mx-auto px-3 sm:px-6 lg:px-8">
         <div className="flex items-center justify-between h-15 sm:h-16">
           {/* Logo & Brand Identity */}
@@ -73,14 +77,14 @@ export const Header: React.FC<HeaderProps> = ({ onOpenAddModal, onNavigateToTab,
             </div>
             <div>
               <div className="flex items-center gap-1.5 sm:gap-2">
-                <span className="text-base sm:text-lg font-extrabold tracking-tight bg-clip-text text-transparent bg-gradient-to-r from-slate-950 via-slate-800 to-indigo-900">
+                <span className="text-base sm:text-lg font-extrabold tracking-tight bg-clip-text text-transparent bg-gradient-to-r from-slate-950 via-slate-800 to-indigo-900 dark:from-white dark:via-slate-200 dark:to-indigo-300">
                   TrackWise
                 </span>
-                <span className="text-[9px] sm:text-[10px] font-bold tracking-wider uppercase px-2 py-0.5 bg-indigo-50/90 text-indigo-700 rounded-full border border-indigo-100/80 shadow-2xs">
+                <span className="text-[9px] sm:text-[10px] font-bold tracking-wider uppercase px-2 py-0.5 bg-indigo-50/90 dark:bg-indigo-950/70 text-indigo-700 dark:text-indigo-300 rounded-full border border-indigo-100/80 dark:border-indigo-800/70 shadow-2xs">
                   Pro
                 </span>
               </div>
-              <p className="text-[11px] font-medium text-slate-400 hidden sm:block tracking-tight">
+              <p className="text-[11px] font-medium text-slate-400 dark:text-slate-500 hidden sm:block tracking-tight">
                 Personal Wealth & Expense Manager
               </p>
             </div>
@@ -90,21 +94,31 @@ export const Header: React.FC<HeaderProps> = ({ onOpenAddModal, onNavigateToTab,
           <div className="flex items-center gap-1.5 sm:gap-2.5">
             {/* Currency Indicator */}
             <div 
-              className="flex items-center gap-1 px-2.5 py-1.5 bg-slate-100/80 hover:bg-slate-200/60 text-slate-700 rounded-xl text-[11px] sm:text-xs font-bold border border-slate-200/70 select-none shadow-2xs transition"
+              className="flex items-center gap-1 px-2.5 py-1.5 bg-slate-100/80 dark:bg-slate-800/80 hover:bg-slate-200/60 dark:hover:bg-slate-700/60 text-slate-700 dark:text-slate-200 rounded-xl text-[11px] sm:text-xs font-bold border border-slate-200/70 dark:border-slate-700/70 select-none shadow-2xs transition"
               title="Default Currency: Indian Rupee (₹ INR)"
             >
-              <span className="text-indigo-600 font-extrabold">₹</span>
+              <span className="text-indigo-600 dark:text-indigo-400 font-extrabold">₹</span>
               <span className="tracking-wide">INR</span>
             </div>
+
+            {/* Dark / Light Mode Toggle Button */}
+            <button
+              onClick={toggleTheme}
+              className="p-2 text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100/80 dark:hover:bg-slate-800/80 rounded-xl transition border border-slate-200/60 dark:border-slate-800 shadow-2xs"
+              title={isDark ? "Switch to Light Mode" : "Switch to Dark Mode"}
+              aria-label="Toggle theme"
+            >
+              {isDark ? <Sun size={17} className="text-amber-400 animate-fade-in" /> : <Moon size={17} className="text-slate-600 animate-fade-in" />}
+            </button>
 
             {/* Recurring Due Alert Badge */}
             {dueRecurring.length > 0 && (
               <button
                 onClick={() => onNavigateToTab('recurring')}
-                className="relative flex items-center gap-1.5 px-2.5 py-1.5 bg-amber-50/90 hover:bg-amber-100 text-amber-800 border border-amber-200/80 rounded-xl text-[11px] sm:text-xs font-semibold shadow-2xs transition active:scale-95"
+                className="relative flex items-center gap-1.5 px-2.5 py-1.5 bg-amber-50/90 dark:bg-amber-950/60 hover:bg-amber-100 dark:hover:bg-amber-900/50 text-amber-800 dark:text-amber-200 border border-amber-200/80 dark:border-amber-800/80 rounded-xl text-[11px] sm:text-xs font-semibold shadow-2xs transition active:scale-95"
                 title={`${dueRecurring.length} bill(s) due for payment`}
               >
-                <Bell size={13} className="text-amber-600 animate-pulse" />
+                <Bell size={13} className="text-amber-600 dark:text-amber-400 animate-pulse" />
                 <span className="hidden sm:inline font-bold">{dueRecurring.length} Due</span>
                 <span className="w-2 h-2 rounded-full bg-amber-500 animate-ping"></span>
               </button>
@@ -114,7 +128,7 @@ export const Header: React.FC<HeaderProps> = ({ onOpenAddModal, onNavigateToTab,
             <div className="relative">
               <button
                 onClick={() => setShowExportMenu(!showExportMenu)}
-                className="p-2 text-slate-600 hover:text-slate-900 hover:bg-slate-100/80 active:bg-slate-200/70 rounded-xl transition border border-slate-200/60 shadow-2xs"
+                className="p-2 text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100/80 dark:hover:bg-slate-800/80 active:bg-slate-200/70 rounded-xl transition border border-slate-200/60 dark:border-slate-800 shadow-2xs"
                 title="Backup & Export Actions"
               >
                 <Download size={17} />
@@ -126,16 +140,16 @@ export const Header: React.FC<HeaderProps> = ({ onOpenAddModal, onNavigateToTab,
                     className="fixed inset-0 z-40" 
                     onClick={() => setShowExportMenu(false)}
                   />
-                  <div className="absolute right-0 mt-2 w-56 bg-white/95 backdrop-blur-2xl rounded-2xl shadow-2xl border border-slate-200/80 py-2 z-50 text-xs animate-fade-in divide-y divide-slate-100">
+                  <div className="absolute right-0 mt-2 w-56 bg-white/95 dark:bg-slate-900/95 backdrop-blur-2xl rounded-2xl shadow-2xl border border-slate-200/80 dark:border-slate-800 py-2 z-50 text-xs animate-fade-in divide-y divide-slate-100 dark:divide-slate-800">
                     <div className="py-1">
                       <button
                         onClick={() => {
                           exportCSV();
                           setShowExportMenu(false);
                         }}
-                        className="w-full text-left px-4 py-2 hover:bg-indigo-50/50 flex items-center gap-2.5 text-slate-700 font-medium transition"
+                        className="w-full text-left px-4 py-2 hover:bg-indigo-50/50 dark:hover:bg-indigo-950/40 flex items-center gap-2.5 text-slate-700 dark:text-slate-200 font-medium transition"
                       >
-                        <Download size={14} className="text-indigo-600" />
+                        <Download size={14} className="text-indigo-600 dark:text-indigo-400" />
                         <span>Export to CSV</span>
                       </button>
                       <button
@@ -143,9 +157,9 @@ export const Header: React.FC<HeaderProps> = ({ onOpenAddModal, onNavigateToTab,
                           onOpenCsvModal();
                           setShowExportMenu(false);
                         }}
-                        className="w-full text-left px-4 py-2 hover:bg-emerald-50/50 flex items-center gap-2.5 text-slate-700 font-medium transition"
+                        className="w-full text-left px-4 py-2 hover:bg-emerald-50/50 dark:hover:bg-emerald-950/40 flex items-center gap-2.5 text-slate-700 dark:text-slate-200 font-medium transition"
                       >
-                        <Upload size={14} className="text-emerald-600" />
+                        <Upload size={14} className="text-emerald-600 dark:text-emerald-400" />
                         <span>Import Bank Statement (CSV)</span>
                       </button>
                     </div>
@@ -155,7 +169,7 @@ export const Header: React.FC<HeaderProps> = ({ onOpenAddModal, onNavigateToTab,
                           exportJSON();
                           setShowExportMenu(false);
                         }}
-                        className="w-full text-left px-4 py-2 hover:bg-slate-50 flex items-center gap-2.5 text-slate-700 font-medium transition"
+                        className="w-full text-left px-4 py-2 hover:bg-slate-50 dark:hover:bg-slate-800/50 flex items-center gap-2.5 text-slate-700 dark:text-slate-200 font-medium transition"
                       >
                         <Download size={14} className="text-slate-400" />
                         <span>Export Full Backup (JSON)</span>
@@ -165,7 +179,7 @@ export const Header: React.FC<HeaderProps> = ({ onOpenAddModal, onNavigateToTab,
                           fileInputRef.current?.click();
                           setShowExportMenu(false);
                         }}
-                        className="w-full text-left px-4 py-2 hover:bg-slate-50 flex items-center gap-2.5 text-slate-700 font-medium transition"
+                        className="w-full text-left px-4 py-2 hover:bg-slate-50 dark:hover:bg-slate-800/50 flex items-center gap-2.5 text-slate-700 dark:text-slate-200 font-medium transition"
                       >
                         <Upload size={14} className="text-slate-400" />
                         <span>Restore Backup (JSON)</span>

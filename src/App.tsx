@@ -58,9 +58,9 @@ const MainApp: React.FC = () => {
   };
 
   return (
-    <div className="min-h-screen bg-[#f8fafc] flex flex-col font-['Plus_Jakarta_Sans',sans-serif] selection:bg-indigo-100 selection:text-indigo-900 relative">
+    <div className="min-h-screen bg-[#f8fafc] dark:bg-[#0b0f19] text-slate-800 dark:text-slate-100 flex flex-col font-['Plus_Jakarta_Sans',sans-serif] selection:bg-indigo-100 dark:selection:bg-indigo-900/40 selection:text-indigo-900 dark:selection:text-indigo-200 relative transition-colors duration-200">
       {/* Subtle Ambient Background Glow for Modern Fintech Depth */}
-      <div className="fixed top-0 left-1/2 -translate-x-1/2 w-full max-w-7xl h-80 bg-gradient-to-b from-indigo-50/50 via-purple-50/20 to-transparent pointer-events-none -z-10" />
+      <div className="fixed top-0 left-1/2 -translate-x-1/2 w-full max-w-7xl h-80 bg-gradient-to-b from-indigo-50/50 via-purple-50/20 to-transparent dark:from-indigo-950/25 dark:via-purple-950/10 dark:to-transparent pointer-events-none -z-10" />
 
       {/* Top Header */}
       <Header
@@ -114,18 +114,18 @@ const MainApp: React.FC = () => {
           setTransactionToEdit(null);
           setIsAddModalOpen(true);
         }}
-        className="md:hidden fixed bottom-20 right-4 z-30 w-13 h-13 rounded-2xl bg-indigo-600 hover:bg-indigo-700 active:scale-95 text-white shadow-lg shadow-indigo-300/80 flex items-center justify-center transition-all p-3.5 focus:outline-none"
+        className="md:hidden fixed bottom-20 right-4 z-30 w-13 h-13 rounded-2xl bg-indigo-600 hover:bg-indigo-700 active:scale-95 text-white shadow-lg shadow-indigo-300/80 dark:shadow-indigo-950/60 flex items-center justify-center transition-all p-3.5 focus:outline-none"
         aria-label="Add Transaction"
       >
         <Plus size={24} />
       </button>
 
       {/* Footer */}
-      <footer className="border-t border-slate-200 bg-white py-5 text-center text-xs text-slate-400">
+      <footer className="border-t border-slate-200 dark:border-slate-800/80 bg-white dark:bg-slate-900/60 py-5 text-center text-xs text-slate-400 dark:text-slate-500">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex flex-col sm:flex-row items-center justify-between gap-2">
           <p>© {new Date().getFullYear()} TrackWise — Private, Fast, Client-Side Expense Tracker</p>
-          <div className="flex items-center gap-3 text-[11px] text-slate-400">
-            <span>Press <kbd className="px-1.5 py-0.5 bg-slate-100 border border-slate-200 rounded font-mono text-[10px] text-slate-600">N</kbd> or <kbd className="px-1.5 py-0.5 bg-slate-100 border border-slate-200 rounded font-mono text-[10px] text-slate-600">Ctrl+K</kbd> for quick transaction</span>
+          <div className="flex items-center gap-3 text-[11px] text-slate-400 dark:text-slate-500">
+            <span>Press <kbd className="px-1.5 py-0.5 bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded font-mono text-[10px] text-slate-600 dark:text-slate-300">N</kbd> or <kbd className="px-1.5 py-0.5 bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded font-mono text-[10px] text-slate-600 dark:text-slate-300">Ctrl+K</kbd> for quick transaction</span>
           </div>
         </div>
       </footer>

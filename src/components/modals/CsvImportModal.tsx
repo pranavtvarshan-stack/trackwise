@@ -149,21 +149,21 @@ export const CsvImportModal: React.FC<CsvImportModalProps> = ({ isOpen, onClose 
 
   return (
     <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4 bg-slate-900/60 backdrop-blur-sm animate-fade-in">
-      <div className="bg-white rounded-t-3xl sm:rounded-2xl shadow-2xl max-w-2xl w-full max-h-[92dvh] sm:max-h-[88vh] flex flex-col overflow-hidden border border-slate-100 pb-safe sm:pb-0">
+      <div className="bg-white dark:bg-slate-900 rounded-t-3xl sm:rounded-2xl shadow-2xl max-w-2xl w-full max-h-[92dvh] sm:max-h-[88vh] flex flex-col overflow-hidden border border-slate-100 dark:border-slate-800 pb-safe sm:pb-0">
         {/* Header */}
-        <div className="flex items-center justify-between px-5 sm:px-6 py-3.5 sm:py-4 border-b border-slate-100">
+        <div className="flex items-center justify-between px-5 sm:px-6 py-3.5 sm:py-4 border-b border-slate-100 dark:border-slate-800">
           <div className="flex items-center gap-2.5">
-            <div className="p-2 bg-emerald-50 text-emerald-600 rounded-xl">
+            <div className="p-2 bg-emerald-50 dark:bg-emerald-950/60 text-emerald-600 dark:text-emerald-400 rounded-xl">
               <FileSpreadsheet size={18} className="sm:w-5 sm:h-5" />
             </div>
             <div>
-              <h2 className="text-base sm:text-lg font-bold text-slate-800">Import CSV Bank Statement</h2>
-              <p className="text-[11px] sm:text-xs text-slate-400">Batch-import transactions from banks, UPI apps, or spreadsheets</p>
+              <h2 className="text-base sm:text-lg font-bold text-slate-800 dark:text-white">Import CSV Bank Statement</h2>
+              <p className="text-[11px] sm:text-xs text-slate-400 dark:text-slate-500">Batch-import transactions from banks, UPI apps, or spreadsheets</p>
             </div>
           </div>
           <button
             onClick={onClose}
-            className="p-1.5 sm:p-2 text-slate-400 hover:text-slate-600 rounded-lg hover:bg-slate-100 transition"
+            className="p-1.5 sm:p-2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 transition"
           >
             <X size={19} />
           </button>
@@ -172,35 +172,35 @@ export const CsvImportModal: React.FC<CsvImportModalProps> = ({ isOpen, onClose 
         {/* Body */}
         <div className="p-4 sm:p-6 overflow-y-auto space-y-4 sm:space-y-5 flex-1">
           {error && (
-            <div className="p-3 text-xs font-semibold text-rose-700 bg-rose-50 border border-rose-200 rounded-xl flex items-center gap-2">
+            <div className="p-3 text-xs font-semibold text-rose-700 dark:text-rose-300 bg-rose-50 dark:bg-rose-950/60 border border-rose-200 dark:border-rose-900/60 rounded-xl flex items-center gap-2">
               <AlertCircle size={16} />
               <span>{error}</span>
             </div>
           )}
 
           {importSummary && (
-            <div className="p-3 text-xs font-semibold text-emerald-700 bg-emerald-50 border border-emerald-200 rounded-xl flex items-center gap-2">
+            <div className="p-3 text-xs font-semibold text-emerald-700 dark:text-emerald-300 bg-emerald-50 dark:bg-emerald-950/60 border border-emerald-200 dark:border-emerald-800 rounded-xl flex items-center gap-2">
               <Check size={16} />
               <span>{importSummary}</span>
             </div>
           )}
 
           {!csvFile ? (
-            <label className="flex flex-col items-center justify-center p-8 border-2 border-dashed border-slate-200 hover:border-indigo-400 rounded-2xl cursor-pointer bg-slate-50/50 hover:bg-indigo-50/20 transition group">
-              <div className="w-12 h-12 rounded-2xl bg-indigo-50 text-indigo-600 flex items-center justify-center mb-2 group-hover:scale-110 transition">
+            <label className="flex flex-col items-center justify-center p-8 border-2 border-dashed border-slate-200 dark:border-slate-700 hover:border-indigo-400 rounded-2xl cursor-pointer bg-slate-50/50 dark:bg-slate-800/40 hover:bg-indigo-50/20 dark:hover:bg-indigo-950/20 transition group">
+              <div className="w-12 h-12 rounded-2xl bg-indigo-50 dark:bg-indigo-950/60 text-indigo-600 dark:text-indigo-400 flex items-center justify-center mb-2 group-hover:scale-110 transition">
                 <Upload size={24} />
               </div>
-              <p className="text-sm font-bold text-slate-700">Click to upload statement CSV</p>
-              <p className="text-xs text-slate-400 mt-0.5">Supports HDFC, SBI, ICICI, Google Pay, or custom sheets</p>
+              <p className="text-sm font-bold text-slate-700 dark:text-slate-200">Click to upload statement CSV</p>
+              <p className="text-xs text-slate-400 dark:text-slate-500 mt-0.5">Supports HDFC, SBI, ICICI, Google Pay, or custom sheets</p>
               <input type="file" accept=".csv" onChange={handleFileUpload} className="hidden" />
             </label>
           ) : (
             <div className="space-y-4">
-              <div className="flex items-center justify-between p-3 bg-slate-50 rounded-xl border border-slate-200 text-xs">
+              <div className="flex items-center justify-between p-3 bg-slate-50 dark:bg-slate-800/80 rounded-xl border border-slate-200 dark:border-slate-700 text-xs">
                 <div className="flex items-center gap-2">
-                  <FileSpreadsheet className="text-indigo-600" size={16} />
-                  <span className="font-bold text-slate-800">{csvFile.name}</span>
-                  <span className="text-slate-400">({rawRows.length} data rows found)</span>
+                  <FileSpreadsheet className="text-indigo-600 dark:text-indigo-400" size={16} />
+                  <span className="font-bold text-slate-800 dark:text-slate-200">{csvFile.name}</span>
+                  <span className="text-slate-400 dark:text-slate-500">({rawRows.length} data rows found)</span>
                 </div>
                 <button
                   type="button"
@@ -209,28 +209,28 @@ export const CsvImportModal: React.FC<CsvImportModalProps> = ({ isOpen, onClose 
                     setRawRows([]);
                     setHeaders([]);
                   }}
-                  className="text-xs text-rose-600 hover:underline font-semibold"
+                  className="text-xs text-rose-600 dark:text-rose-400 hover:underline font-semibold"
                 >
                   Change File
                 </button>
               </div>
 
               {/* Column Mapping Selectors */}
-              <div className="p-4 bg-slate-50 rounded-xl border border-slate-200/80 space-y-3">
-                <h4 className="text-xs font-bold text-slate-700 uppercase tracking-wider flex items-center gap-1.5">
-                  <Sparkles size={14} className="text-indigo-600" />
+              <div className="p-4 bg-slate-50 dark:bg-slate-800/60 rounded-xl border border-slate-200/80 dark:border-slate-700/80 space-y-3">
+                <h4 className="text-xs font-bold text-slate-700 dark:text-slate-300 uppercase tracking-wider flex items-center gap-1.5">
+                  <Sparkles size={14} className="text-indigo-600 dark:text-indigo-400" />
                   Map CSV Columns
                 </h4>
 
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                   <div>
-                    <label className="block text-[11px] font-semibold text-slate-500 mb-1">
+                    <label className="block text-[11px] font-semibold text-slate-500 dark:text-slate-400 mb-1">
                       Title / Description Column
                     </label>
                     <select
                       value={titleCol}
                       onChange={(e) => setTitleCol(Number(e.target.value))}
-                      className="w-full p-2 bg-white border border-slate-200 rounded-lg text-xs font-semibold text-slate-800 outline-none"
+                      className="w-full p-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg text-xs font-semibold text-slate-800 dark:text-white outline-none"
                     >
                       {headers.map((h, idx) => (
                         <option key={idx} value={idx}>
@@ -241,13 +241,13 @@ export const CsvImportModal: React.FC<CsvImportModalProps> = ({ isOpen, onClose 
                   </div>
 
                   <div>
-                    <label className="block text-[11px] font-semibold text-slate-500 mb-1">
+                    <label className="block text-[11px] font-semibold text-slate-500 dark:text-slate-400 mb-1">
                       Amount Column
                     </label>
                     <select
                       value={amountCol}
                       onChange={(e) => setAmountCol(Number(e.target.value))}
-                      className="w-full p-2 bg-white border border-slate-200 rounded-lg text-xs font-semibold text-slate-800 outline-none"
+                      className="w-full p-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg text-xs font-semibold text-slate-800 dark:text-white outline-none"
                     >
                       {headers.map((h, idx) => (
                         <option key={idx} value={idx}>
@@ -258,13 +258,13 @@ export const CsvImportModal: React.FC<CsvImportModalProps> = ({ isOpen, onClose 
                   </div>
 
                   <div>
-                    <label className="block text-[11px] font-semibold text-slate-500 mb-1">
+                    <label className="block text-[11px] font-semibold text-slate-500 dark:text-slate-400 mb-1">
                       Date Column
                     </label>
                     <select
                       value={dateCol}
                       onChange={(e) => setDateCol(Number(e.target.value))}
-                      className="w-full p-2 bg-white border border-slate-200 rounded-lg text-xs font-semibold text-slate-800 outline-none"
+                      className="w-full p-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg text-xs font-semibold text-slate-800 dark:text-white outline-none"
                     >
                       {headers.map((h, idx) => (
                         <option key={idx} value={idx}>
@@ -275,15 +275,15 @@ export const CsvImportModal: React.FC<CsvImportModalProps> = ({ isOpen, onClose 
                   </div>
                 </div>
 
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-2 border-t border-slate-200/60">
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-2 border-t border-slate-200/60 dark:border-slate-700/60">
                   <div>
-                    <label className="block text-[11px] font-semibold text-slate-500 mb-1">
+                    <label className="block text-[11px] font-semibold text-slate-500 dark:text-slate-400 mb-1">
                       Assign Type
                     </label>
                     <select
                       value={defaultType}
                       onChange={(e) => setDefaultType(e.target.value as any)}
-                      className="w-full p-2 bg-white border border-slate-200 rounded-lg text-xs font-semibold text-slate-800 outline-none"
+                      className="w-full p-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg text-xs font-semibold text-slate-800 dark:text-white outline-none"
                     >
                       <option value="expense">Expense (-)</option>
                       <option value="income">Income (+)</option>
@@ -291,13 +291,13 @@ export const CsvImportModal: React.FC<CsvImportModalProps> = ({ isOpen, onClose 
                   </div>
 
                   <div>
-                    <label className="block text-[11px] font-semibold text-slate-500 mb-1">
+                    <label className="block text-[11px] font-semibold text-slate-500 dark:text-slate-400 mb-1">
                       Assign Category
                     </label>
                     <select
                       value={defaultCategory}
                       onChange={(e) => setDefaultCategory(e.target.value)}
-                      className="w-full p-2 bg-white border border-slate-200 rounded-lg text-xs font-semibold text-slate-800 outline-none"
+                      className="w-full p-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg text-xs font-semibold text-slate-800 dark:text-white outline-none"
                     >
                       {categories.map((c) => (
                         <option key={c.id} value={c.id}>
@@ -308,13 +308,13 @@ export const CsvImportModal: React.FC<CsvImportModalProps> = ({ isOpen, onClose 
                   </div>
 
                   <div>
-                    <label className="block text-[11px] font-semibold text-slate-500 mb-1">
+                    <label className="block text-[11px] font-semibold text-slate-500 dark:text-slate-400 mb-1">
                       Payment Mode
                     </label>
                     <select
                       value={defaultPaymentMethod}
                       onChange={(e) => setDefaultPaymentMethod(e.target.value)}
-                      className="w-full p-2 bg-white border border-slate-200 rounded-lg text-xs font-semibold text-slate-800 outline-none"
+                      className="w-full p-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg text-xs font-semibold text-slate-800 dark:text-white outline-none"
                     >
                       {paymentMethods.map((pm) => (
                         <option key={pm.id} value={pm.id}>
@@ -328,26 +328,26 @@ export const CsvImportModal: React.FC<CsvImportModalProps> = ({ isOpen, onClose 
 
               {/* Live Preview Table */}
               <div>
-                <h4 className="text-xs font-bold text-slate-700 uppercase tracking-wider mb-2">
+                <h4 className="text-xs font-bold text-slate-700 dark:text-slate-300 uppercase tracking-wider mb-2">
                   Preview (First 4 Rows)
                 </h4>
-                <div className="border border-slate-200 rounded-xl overflow-hidden">
+                <div className="border border-slate-200 dark:border-slate-700 rounded-xl overflow-hidden">
                   <table className="w-full text-left text-xs">
-                    <thead className="bg-slate-100 text-slate-600 font-semibold border-b border-slate-200">
+                    <thead className="bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 font-semibold border-b border-slate-200 dark:border-slate-700">
                       <tr>
                         <th className="p-2.5">Date</th>
                         <th className="p-2.5">Title / Payee</th>
                         <th className="p-2.5 text-right">Amount</th>
                       </tr>
                     </thead>
-                    <tbody className="divide-y divide-slate-100">
+                    <tbody className="divide-y divide-slate-100 dark:divide-slate-800/80">
                       {rawRows.slice(0, 4).map((row, idx) => (
-                        <tr key={idx} className="hover:bg-slate-50">
-                          <td className="p-2.5 text-slate-500">{row[dateCol] || 'Today'}</td>
-                          <td className="p-2.5 font-bold text-slate-800 truncate max-w-[200px]">
+                        <tr key={idx} className="hover:bg-slate-50 dark:hover:bg-slate-800/50">
+                          <td className="p-2.5 text-slate-500 dark:text-slate-400">{row[dateCol] || 'Today'}</td>
+                          <td className="p-2.5 font-bold text-slate-800 dark:text-slate-200 truncate max-w-[200px]">
                             {row[titleCol] || 'Transaction'}
                           </td>
-                          <td className="p-2.5 text-right font-bold text-slate-900">
+                          <td className="p-2.5 text-right font-bold text-slate-900 dark:text-white">
                             {formatCurrency(parseFloat(row[amountCol]?.replace(/[^\d.-]/g, '') || '0'), settings.currency, false)}
                           </td>
                         </tr>
@@ -361,11 +361,11 @@ export const CsvImportModal: React.FC<CsvImportModalProps> = ({ isOpen, onClose 
         </div>
 
         {/* Footer */}
-        <div className="px-6 py-4 border-t border-slate-100 flex items-center justify-between">
+        <div className="px-6 py-4 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between">
           <button
             type="button"
             onClick={onClose}
-            className="px-4 py-2 text-xs font-semibold text-slate-600 hover:bg-slate-100 rounded-xl transition"
+            className="px-4 py-2 text-xs font-semibold text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-xl transition"
           >
             Cancel
           </button>
@@ -373,7 +373,7 @@ export const CsvImportModal: React.FC<CsvImportModalProps> = ({ isOpen, onClose 
             <button
               type="button"
               onClick={handleImport}
-              className="px-5 py-2 text-xs font-bold text-white bg-indigo-600 hover:bg-indigo-700 rounded-xl shadow-md shadow-indigo-200 transition flex items-center gap-1.5"
+              className="px-5 py-2 text-xs font-bold text-white bg-indigo-600 hover:bg-indigo-700 rounded-xl shadow-md shadow-indigo-200 dark:shadow-none transition flex items-center gap-1.5"
             >
               <span>Import {rawRows.length} Transactions</span>
               <ArrowRight size={14} />

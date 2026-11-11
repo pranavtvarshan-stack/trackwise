@@ -13,7 +13,10 @@ import {
   Sparkles,
   Check,
   Edit2,
-  X
+  X,
+  Sun,
+  Moon,
+  Laptop
 } from 'lucide-react';
 import { useExpense } from '../../context/ExpenseContext';
 import { CURRENCIES } from '../../constants/defaults';
@@ -181,48 +184,100 @@ export const SettingsView: React.FC = () => {
   return (
     <div className="space-y-6 max-w-4xl mx-auto">
       <div>
-        <h2 className="text-xl font-bold text-slate-800">Preferences & Settings</h2>
-        <p className="text-xs text-slate-500">
-          Customize currency, manage expense categories, and backup or restore data
+        <h2 className="text-xl font-bold text-slate-800 dark:text-white">Preferences & Settings</h2>
+        <p className="text-xs text-slate-500 dark:text-slate-400">
+          Customize currency, appearance, manage expense categories, and backup or restore data
         </p>
       </div>
 
       {successMsg && (
-        <div className="p-3 bg-emerald-50 border border-emerald-200 text-emerald-800 rounded-xl text-xs font-semibold flex items-center gap-2 animate-fade-in">
-          <Check size={16} className="text-emerald-600" />
+        <div className="p-3 bg-emerald-50 dark:bg-emerald-950/60 border border-emerald-200 dark:border-emerald-800 text-emerald-800 dark:text-emerald-200 rounded-xl text-xs font-semibold flex items-center gap-2 animate-fade-in">
+          <Check size={16} className="text-emerald-600 dark:text-emerald-400" />
           <span>{successMsg}</span>
         </div>
       )}
 
-      {/* 1. General Preferences */}
-      <div className="bg-white/90 backdrop-blur-md p-5 sm:p-6 rounded-2xl border border-slate-200/70 shadow-[0_2px_16px_rgba(0,0,0,0.03)] space-y-4">
-        <div className="flex items-center gap-2.5 pb-3 border-b border-slate-100">
-          <Coins className="text-indigo-600" size={18} />
-          <h3 className="text-sm font-bold text-slate-800">Currency & Formatting</h3>
+      {/* 1. Appearance / Theme Preference */}
+      <div className="bg-white/90 dark:bg-slate-900/80 backdrop-blur-md p-5 sm:p-6 rounded-2xl border border-slate-200/70 dark:border-slate-800/80 shadow-[0_2px_16px_rgba(0,0,0,0.03)] space-y-4">
+        <div className="flex items-center gap-2.5 pb-3 border-b border-slate-100 dark:border-slate-800">
+          <Sparkles className="text-indigo-600 dark:text-indigo-400" size={18} />
+          <div>
+            <h3 className="text-sm font-bold text-slate-800 dark:text-white">Theme & Appearance</h3>
+            <p className="text-xs text-slate-400 dark:text-slate-500">Choose your preferred application color interface</p>
+          </div>
+        </div>
+
+        <div className="grid grid-cols-3 gap-3">
+          <button
+            type="button"
+            onClick={() => updateSettings({ theme: 'light' })}
+            className={`p-3.5 rounded-xl border flex flex-col items-center justify-center gap-2 transition-all ${
+              settings.theme === 'light'
+                ? 'bg-indigo-50/80 dark:bg-indigo-950/40 border-indigo-500 text-indigo-700 dark:text-indigo-300 font-bold shadow-xs'
+                : 'bg-slate-50/80 dark:bg-slate-800/60 border-slate-200/80 dark:border-slate-700/80 text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-700/60'
+            }`}
+          >
+            <Sun size={20} className={settings.theme === 'light' ? 'text-amber-500' : 'text-slate-400'} />
+            <span className="text-xs">Light</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => updateSettings({ theme: 'dark' })}
+            className={`p-3.5 rounded-xl border flex flex-col items-center justify-center gap-2 transition-all ${
+              settings.theme === 'dark'
+                ? 'bg-indigo-50/80 dark:bg-indigo-950/40 border-indigo-500 text-indigo-700 dark:text-indigo-300 font-bold shadow-xs'
+                : 'bg-slate-50/80 dark:bg-slate-800/60 border-slate-200/80 dark:border-slate-700/80 text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-700/60'
+            }`}
+          >
+            <Moon size={20} className={settings.theme === 'dark' ? 'text-indigo-400' : 'text-slate-400'} />
+            <span className="text-xs">Dark</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => updateSettings({ theme: 'system' })}
+            className={`p-3.5 rounded-xl border flex flex-col items-center justify-center gap-2 transition-all ${
+              settings.theme === 'system'
+                ? 'bg-indigo-50/80 dark:bg-indigo-950/40 border-indigo-500 text-indigo-700 dark:text-indigo-300 font-bold shadow-xs'
+                : 'bg-slate-50/80 dark:bg-slate-800/60 border-slate-200/80 dark:border-slate-700/80 text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-700/60'
+            }`}
+          >
+            <Laptop size={20} className={settings.theme === 'system' ? 'text-indigo-500' : 'text-slate-400'} />
+            <span className="text-xs">System</span>
+          </button>
+        </div>
+      </div>
+
+      {/* 2. General Preferences */}
+      <div className="bg-white/90 dark:bg-slate-900/80 backdrop-blur-md p-5 sm:p-6 rounded-2xl border border-slate-200/70 dark:border-slate-800/80 shadow-[0_2px_16px_rgba(0,0,0,0.03)] space-y-4">
+        <div className="flex items-center gap-2.5 pb-3 border-b border-slate-100 dark:border-slate-800">
+          <Coins className="text-indigo-600 dark:text-indigo-400" size={18} />
+          <h3 className="text-sm font-bold text-slate-800 dark:text-white">Currency & Formatting</h3>
         </div>
 
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <div>
-            <label className="block text-xs font-semibold uppercase tracking-wider text-slate-500 mb-1.5">
+            <label className="block text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400 mb-1.5">
               Default Currency
             </label>
-            <div className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-semibold text-slate-800 flex items-center justify-between">
+            <div className="w-full px-3.5 py-2.5 bg-slate-50 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700/80 rounded-xl text-xs font-semibold text-slate-800 dark:text-slate-200 flex items-center justify-between">
               <span className="flex items-center gap-2">
-                <span className="font-bold text-indigo-600">₹</span>
+                <span className="font-bold text-indigo-600 dark:text-indigo-400">₹</span>
                 <span>Indian Rupee (INR)</span>
               </span>
-              <span className="text-[10px] text-emerald-700 font-semibold bg-emerald-50 border border-emerald-200 px-2.5 py-0.5 rounded-full">
+              <span className="text-[10px] text-emerald-700 dark:text-emerald-300 font-semibold bg-emerald-50 dark:bg-emerald-950/60 border border-emerald-200 dark:border-emerald-800 px-2.5 py-0.5 rounded-full">
                 Active Default
               </span>
             </div>
           </div>
 
           <div>
-            <label className="block text-xs font-semibold uppercase tracking-wider text-slate-500 mb-1.5">
+            <label className="block text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400 mb-1.5">
               Decimals Display
             </label>
             <div className="flex items-center gap-3 pt-2">
-              <label className="flex items-center gap-2 text-xs font-semibold text-slate-700 cursor-pointer">
+              <label className="flex items-center gap-2 text-xs font-semibold text-slate-700 dark:text-slate-300 cursor-pointer">
                 <input
                   type="checkbox"
                   checked={settings.showDecimals}
@@ -236,41 +291,41 @@ export const SettingsView: React.FC = () => {
         </div>
       </div>
 
-      {/* 2. Custom Category Manager */}
-      <div className="bg-white/90 backdrop-blur-md p-5 sm:p-6 rounded-2xl border border-slate-200/70 shadow-[0_2px_16px_rgba(0,0,0,0.03)] space-y-5">
-        <div className="flex items-center gap-2.5 pb-3 border-b border-slate-100">
-          <Tags className="text-indigo-600" size={18} />
+      {/* 3. Custom Category Manager */}
+      <div className="bg-white/90 dark:bg-slate-900/80 backdrop-blur-md p-5 sm:p-6 rounded-2xl border border-slate-200/70 dark:border-slate-800/80 shadow-[0_2px_16px_rgba(0,0,0,0.03)] space-y-5">
+        <div className="flex items-center gap-2.5 pb-3 border-b border-slate-100 dark:border-slate-800">
+          <Tags className="text-indigo-600 dark:text-indigo-400" size={18} />
           <div>
-            <h3 className="text-sm font-bold text-slate-800">Categories Management</h3>
-            <p className="text-xs text-slate-400">Add custom categories to label your finances</p>
+            <h3 className="text-sm font-bold text-slate-800 dark:text-white">Categories Management</h3>
+            <p className="text-xs text-slate-400 dark:text-slate-500">Add custom categories to label your finances</p>
           </div>
         </div>
 
         {/* Add Category Form */}
-        <form onSubmit={handleAddCategory} className="p-4 bg-slate-50 rounded-xl space-y-3.5">
-          <h4 className="text-xs font-bold text-slate-700 uppercase tracking-wider">
+        <form onSubmit={handleAddCategory} className="p-4 bg-slate-50 dark:bg-slate-800/60 rounded-xl space-y-3.5 border border-slate-200/60 dark:border-slate-700/60">
+          <h4 className="text-xs font-bold text-slate-700 dark:text-slate-300 uppercase tracking-wider">
             Create Custom Category
           </h4>
 
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
             <div>
-              <label className="block text-[11px] font-semibold text-slate-500 mb-1">Name</label>
+              <label className="block text-[11px] font-semibold text-slate-500 dark:text-slate-400 mb-1">Name</label>
               <input
                 type="text"
                 placeholder="e.g. Freelance, Pets, Gaming"
                 value={newCatName}
                 onChange={(e) => setNewCatName(e.target.value)}
-                className="w-full px-3 py-2 bg-white border border-slate-200 rounded-lg text-xs font-medium outline-none focus:border-indigo-500"
+                className="w-full px-3 py-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white rounded-lg text-xs font-medium outline-none focus:border-indigo-500"
                 required
               />
             </div>
 
             <div>
-              <label className="block text-[11px] font-semibold text-slate-500 mb-1">Type</label>
+              <label className="block text-[11px] font-semibold text-slate-500 dark:text-slate-400 mb-1">Type</label>
               <select
                 value={newCatType}
                 onChange={(e) => setNewCatType(e.target.value as TransactionType)}
-                className="w-full px-3 py-2 bg-white border border-slate-200 rounded-lg text-xs font-medium outline-none"
+                className="w-full px-3 py-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white rounded-lg text-xs font-medium outline-none"
               >
                 <option value="expense">Expense (-)</option>
                 <option value="income">Income (+)</option>
@@ -278,11 +333,11 @@ export const SettingsView: React.FC = () => {
             </div>
 
             <div>
-              <label className="block text-[11px] font-semibold text-slate-500 mb-1">Icon</label>
+              <label className="block text-[11px] font-semibold text-slate-500 dark:text-slate-400 mb-1">Icon</label>
               <select
                 value={newCatIcon}
                 onChange={(e) => setNewCatIcon(e.target.value)}
-                className="w-full px-3 py-2 bg-white border border-slate-200 rounded-lg text-xs font-medium outline-none"
+                className="w-full px-3 py-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white rounded-lg text-xs font-medium outline-none"
               >
                 {AVAILABLE_ICONS.map((icon) => (
                   <option key={icon} value={icon}>
@@ -295,7 +350,7 @@ export const SettingsView: React.FC = () => {
 
           {/* Color Picker palette */}
           <div>
-            <label className="block text-[11px] font-semibold text-slate-500 mb-1.5">Color Accent</label>
+            <label className="block text-[11px] font-semibold text-slate-500 dark:text-slate-400 mb-1.5">Color Accent</label>
             <div className="flex flex-wrap gap-2">
               {PRESET_COLORS.map((col) => (
                 <button
@@ -322,14 +377,14 @@ export const SettingsView: React.FC = () => {
 
         {/* Existing Categories List */}
         <div>
-          <h4 className="text-xs font-bold text-slate-700 uppercase tracking-wider mb-2">
+          <h4 className="text-xs font-bold text-slate-700 dark:text-slate-300 uppercase tracking-wider mb-2">
             Active Categories ({categories.length})
           </h4>
           <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2">
             {categories.map((cat) => (
               <div
                 key={cat.id}
-                className="p-2.5 rounded-xl border border-slate-200 flex items-center justify-between gap-2 bg-white"
+                className="p-2.5 rounded-xl border border-slate-200 dark:border-slate-800 flex items-center justify-between gap-2 bg-white dark:bg-slate-800/80"
               >
                 <div className="flex items-center gap-2.5 min-w-0">
                   <div
@@ -339,8 +394,8 @@ export const SettingsView: React.FC = () => {
                     <CategoryIcon name={cat.icon} size={15} />
                   </div>
                   <div className="min-w-0">
-                    <p className="text-xs font-bold text-slate-800 truncate">{cat.name}</p>
-                    <span className="text-[10px] uppercase font-semibold text-slate-400">
+                    <p className="text-xs font-bold text-slate-800 dark:text-slate-200 truncate">{cat.name}</p>
+                    <span className="text-[10px] uppercase font-semibold text-slate-400 dark:text-slate-500">
                       {cat.type}
                     </span>
                   </div>
@@ -349,14 +404,14 @@ export const SettingsView: React.FC = () => {
                 <div className="flex items-center gap-1">
                   <button
                     onClick={() => setEditingCategory(cat)}
-                    className="p-1 text-slate-400 hover:text-indigo-600 transition"
+                    className="p-1 text-slate-400 hover:text-indigo-600 dark:hover:text-indigo-400 transition"
                     title="Edit category"
                   >
                     <Edit2 size={13} />
                   </button>
                   <button
                     onClick={() => handleDeleteCategory(cat)}
-                    className="p-1 text-slate-400 hover:text-rose-600 transition"
+                    className="p-1 text-slate-400 hover:text-rose-600 dark:hover:text-rose-400 transition"
                     title="Delete category"
                   >
                     <Trash2 size={13} />
@@ -368,41 +423,41 @@ export const SettingsView: React.FC = () => {
         </div>
       </div>
 
-      {/* 3. Payment Methods Manager */}
-      <div className="bg-white/90 backdrop-blur-md p-5 sm:p-6 rounded-2xl border border-slate-200/70 shadow-[0_2px_16px_rgba(0,0,0,0.03)] space-y-5">
-        <div className="flex items-center gap-2.5 pb-3 border-b border-slate-100">
-          <CreditCard className="text-indigo-600" size={18} />
+      {/* 4. Payment Methods Manager */}
+      <div className="bg-white/90 dark:bg-slate-900/80 backdrop-blur-md p-5 sm:p-6 rounded-2xl border border-slate-200/70 dark:border-slate-800/80 shadow-[0_2px_16px_rgba(0,0,0,0.03)] space-y-5">
+        <div className="flex items-center gap-2.5 pb-3 border-b border-slate-100 dark:border-slate-800">
+          <CreditCard className="text-indigo-600 dark:text-indigo-400" size={18} />
           <div>
-            <h3 className="text-sm font-bold text-slate-800">Payment Methods Management</h3>
-            <p className="text-xs text-slate-400">Add or remove payment options like UPI, Cards, GPay, or Cash</p>
+            <h3 className="text-sm font-bold text-slate-800 dark:text-white">Payment Methods Management</h3>
+            <p className="text-xs text-slate-400 dark:text-slate-500">Add or remove payment options like UPI, Cards, GPay, or Cash</p>
           </div>
         </div>
 
         {/* Add Payment Method Form */}
-        <form onSubmit={handleAddPaymentMethod} className="p-4 bg-slate-50 rounded-xl space-y-3.5">
-          <h4 className="text-xs font-bold text-slate-700 uppercase tracking-wider">
+        <form onSubmit={handleAddPaymentMethod} className="p-4 bg-slate-50 dark:bg-slate-800/60 rounded-xl space-y-3.5 border border-slate-200/60 dark:border-slate-700/60">
+          <h4 className="text-xs font-bold text-slate-700 dark:text-slate-300 uppercase tracking-wider">
             Add New Payment Mode
           </h4>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div>
-              <label className="block text-[11px] font-semibold text-slate-500 mb-1">Method Name</label>
+              <label className="block text-[11px] font-semibold text-slate-500 dark:text-slate-400 mb-1">Method Name</label>
               <input
                 type="text"
                 placeholder="e.g. PhonePe, Google Pay, HDFC Card, Paytm"
                 value={newPmLabel}
                 onChange={(e) => setNewPmLabel(e.target.value)}
-                className="w-full px-3 py-2 bg-white border border-slate-200 rounded-lg text-xs font-medium outline-none focus:border-indigo-500"
+                className="w-full px-3 py-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white rounded-lg text-xs font-medium outline-none focus:border-indigo-500"
                 required
               />
             </div>
 
             <div>
-              <label className="block text-[11px] font-semibold text-slate-500 mb-1">Icon</label>
+              <label className="block text-[11px] font-semibold text-slate-500 dark:text-slate-400 mb-1">Icon</label>
               <select
                 value={newPmIcon}
                 onChange={(e) => setNewPmIcon(e.target.value)}
-                className="w-full px-3 py-2 bg-white border border-slate-200 rounded-lg text-xs font-medium outline-none"
+                className="w-full px-3 py-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white rounded-lg text-xs font-medium outline-none"
               >
                 {PAYMENT_METHOD_ICONS.map((icon) => (
                   <option key={icon} value={icon}>
@@ -424,33 +479,33 @@ export const SettingsView: React.FC = () => {
 
         {/* Active Payment Methods List */}
         <div>
-          <h4 className="text-xs font-bold text-slate-700 uppercase tracking-wider mb-2">
+          <h4 className="text-xs font-bold text-slate-700 dark:text-slate-300 uppercase tracking-wider mb-2">
             Active Payment Options ({paymentMethods.length})
           </h4>
           <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2">
             {paymentMethods.map((pm) => (
               <div
                 key={pm.id}
-                className="p-2.5 rounded-xl border border-slate-200 flex items-center justify-between gap-2 bg-white hover:border-slate-300 transition"
+                className="p-2.5 rounded-xl border border-slate-200 dark:border-slate-800 flex items-center justify-between gap-2 bg-white dark:bg-slate-800/80 hover:border-slate-300 dark:hover:border-slate-700 transition"
               >
                 <div className="flex items-center gap-2.5 min-w-0">
-                  <div className="w-7 h-7 rounded-lg bg-indigo-50 text-indigo-600 flex items-center justify-center flex-shrink-0">
+                  <div className="w-7 h-7 rounded-lg bg-indigo-50 dark:bg-indigo-950/60 text-indigo-600 dark:text-indigo-400 flex items-center justify-center flex-shrink-0">
                     <CategoryIcon name={pm.icon} size={15} />
                   </div>
-                  <span className="text-xs font-bold text-slate-800 truncate">{pm.label}</span>
+                  <span className="text-xs font-bold text-slate-800 dark:text-slate-200 truncate">{pm.label}</span>
                 </div>
 
                 <div className="flex items-center gap-1">
                   <button
                     onClick={() => setEditingPm(pm)}
-                    className="p-1 text-slate-400 hover:text-indigo-600 transition"
+                    className="p-1 text-slate-400 hover:text-indigo-600 dark:hover:text-indigo-400 transition"
                     title="Edit payment method"
                   >
                     <Edit2 size={13} />
                   </button>
                   <button
                     onClick={() => handleDeletePaymentMethod(pm)}
-                    className="p-1 text-slate-400 hover:text-rose-600 transition"
+                    className="p-1 text-slate-400 hover:text-rose-600 dark:hover:text-rose-400 transition"
                     title="Delete payment method"
                   >
                     <Trash2 size={13} />
@@ -465,31 +520,31 @@ export const SettingsView: React.FC = () => {
       {/* Edit Category Modal */}
       {editingCategory && (
         <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4 bg-slate-900/60 backdrop-blur-sm animate-fade-in">
-          <div className="bg-white rounded-t-3xl sm:rounded-2xl shadow-2xl max-w-sm w-full p-5 sm:p-6 space-y-4 pb-safe sm:pb-6">
-            <div className="flex items-center justify-between border-b border-slate-100 pb-3">
-              <h3 className="text-sm font-bold text-slate-800">Edit Category</h3>
-              <button onClick={() => setEditingCategory(null)} className="text-slate-400 hover:text-slate-600">
+          <div className="bg-white dark:bg-slate-900 rounded-t-3xl sm:rounded-2xl border border-slate-200 dark:border-slate-800 shadow-2xl max-w-sm w-full p-5 sm:p-6 space-y-4 pb-safe sm:pb-6">
+            <div className="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 pb-3">
+              <h3 className="text-sm font-bold text-slate-800 dark:text-white">Edit Category</h3>
+              <button onClick={() => setEditingCategory(null)} className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-300">
                 <X size={18} />
               </button>
             </div>
             <form onSubmit={handleUpdateCategory} className="space-y-3">
               <div>
-                <label className="block text-[11px] font-semibold text-slate-500 mb-1">Name</label>
+                <label className="block text-[11px] font-semibold text-slate-500 dark:text-slate-400 mb-1">Name</label>
                 <input
                   type="text"
                   value={editingCategory.name}
                   onChange={(e) => setEditingCategory({ ...editingCategory, name: e.target.value })}
-                  className="w-full px-3 py-2 border border-slate-200 rounded-lg text-xs font-medium outline-none focus:border-indigo-500"
+                  className="w-full px-3 py-2 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white rounded-lg text-xs font-medium outline-none focus:border-indigo-500"
                   required
                 />
               </div>
 
               <div>
-                <label className="block text-[11px] font-semibold text-slate-500 mb-1">Type</label>
+                <label className="block text-[11px] font-semibold text-slate-500 dark:text-slate-400 mb-1">Type</label>
                 <select
                   value={editingCategory.type}
                   onChange={(e) => setEditingCategory({ ...editingCategory, type: e.target.value as any })}
-                  className="w-full px-3 py-2 border border-slate-200 rounded-lg text-xs outline-none"
+                  className="w-full px-3 py-2 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white rounded-lg text-xs outline-none"
                 >
                   <option value="expense">Expense (-)</option>
                   <option value="income">Income (+)</option>
@@ -498,11 +553,11 @@ export const SettingsView: React.FC = () => {
               </div>
 
               <div>
-                <label className="block text-[11px] font-semibold text-slate-500 mb-1">Icon</label>
+                <label className="block text-[11px] font-semibold text-slate-500 dark:text-slate-400 mb-1">Icon</label>
                 <select
                   value={editingCategory.icon}
                   onChange={(e) => setEditingCategory({ ...editingCategory, icon: e.target.value })}
-                  className="w-full px-3 py-2 border border-slate-200 rounded-lg text-xs outline-none"
+                  className="w-full px-3 py-2 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white rounded-lg text-xs outline-none"
                 >
                   {AVAILABLE_ICONS.map((i) => (
                     <option key={i} value={i}>{i}</option>
@@ -511,7 +566,7 @@ export const SettingsView: React.FC = () => {
               </div>
 
               <div>
-                <label className="block text-[11px] font-semibold text-slate-500 mb-1.5">Color</label>
+                <label className="block text-[11px] font-semibold text-slate-500 dark:text-slate-400 mb-1.5">Color</label>
                 <div className="flex flex-wrap gap-2">
                   {PRESET_COLORS.map((col) => (
                     <button
@@ -527,11 +582,11 @@ export const SettingsView: React.FC = () => {
                 </div>
               </div>
 
-              <div className="pt-2 flex justify-end gap-2 border-t border-slate-100">
+              <div className="pt-2 flex justify-end gap-2 border-t border-slate-100 dark:border-slate-800">
                 <button
                   type="button"
                   onClick={() => setEditingCategory(null)}
-                  className="px-3 py-1.5 text-xs text-slate-600 hover:bg-slate-100 rounded-lg"
+                  className="px-3 py-1.5 text-xs text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg"
                 >
                   Cancel
                 </button>
@@ -550,31 +605,31 @@ export const SettingsView: React.FC = () => {
       {/* Edit Payment Method Modal */}
       {editingPm && (
         <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4 bg-slate-900/60 backdrop-blur-sm animate-fade-in">
-          <div className="bg-white rounded-t-3xl sm:rounded-2xl shadow-2xl max-w-sm w-full p-5 sm:p-6 space-y-4 pb-safe sm:pb-6">
-            <div className="flex items-center justify-between border-b border-slate-100 pb-3">
-              <h3 className="text-sm font-bold text-slate-800">Edit Payment Method</h3>
-              <button onClick={() => setEditingPm(null)} className="text-slate-400 hover:text-slate-600">
+          <div className="bg-white dark:bg-slate-900 rounded-t-3xl sm:rounded-2xl border border-slate-200 dark:border-slate-800 shadow-2xl max-w-sm w-full p-5 sm:p-6 space-y-4 pb-safe sm:pb-6">
+            <div className="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 pb-3">
+              <h3 className="text-sm font-bold text-slate-800 dark:text-white">Edit Payment Method</h3>
+              <button onClick={() => setEditingPm(null)} className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-300">
                 <X size={18} />
               </button>
             </div>
             <form onSubmit={handleUpdatePaymentMethod} className="space-y-3">
               <div>
-                <label className="block text-[11px] font-semibold text-slate-500 mb-1">Label</label>
+                <label className="block text-[11px] font-semibold text-slate-500 dark:text-slate-400 mb-1">Label</label>
                 <input
                   type="text"
                   value={editingPm.label}
                   onChange={(e) => setEditingPm({ ...editingPm, label: e.target.value })}
-                  className="w-full px-3 py-2 border border-slate-200 rounded-lg text-xs font-medium outline-none focus:border-indigo-500"
+                  className="w-full px-3 py-2 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white rounded-lg text-xs font-medium outline-none focus:border-indigo-500"
                   required
                 />
               </div>
 
               <div>
-                <label className="block text-[11px] font-semibold text-slate-500 mb-1">Icon</label>
+                <label className="block text-[11px] font-semibold text-slate-500 dark:text-slate-400 mb-1">Icon</label>
                 <select
                   value={editingPm.icon}
                   onChange={(e) => setEditingPm({ ...editingPm, icon: e.target.value })}
-                  className="w-full px-3 py-2 border border-slate-200 rounded-lg text-xs outline-none"
+                  className="w-full px-3 py-2 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white rounded-lg text-xs outline-none"
                 >
                   {PAYMENT_METHOD_ICONS.map((i) => (
                     <option key={i} value={i}>{i}</option>
@@ -582,11 +637,11 @@ export const SettingsView: React.FC = () => {
                 </select>
               </div>
 
-              <div className="pt-2 flex justify-end gap-2 border-t border-slate-100">
+              <div className="pt-2 flex justify-end gap-2 border-t border-slate-100 dark:border-slate-800">
                 <button
                   type="button"
                   onClick={() => setEditingPm(null)}
-                  className="px-3 py-1.5 text-xs text-slate-600 hover:bg-slate-100 rounded-lg"
+                  className="px-3 py-1.5 text-xs text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg"
                 >
                   Cancel
                 </button>
@@ -602,42 +657,42 @@ export const SettingsView: React.FC = () => {
         </div>
       )}
 
-      {/* 4. Data Backup, Restore & Danger Zone */}
-      <div className="bg-white/90 backdrop-blur-md p-5 sm:p-6 rounded-2xl border border-slate-200/70 shadow-[0_2px_16px_rgba(0,0,0,0.03)] space-y-4">
-        <div className="flex items-center gap-2.5 pb-3 border-b border-slate-100">
-          <Database className="text-indigo-600" size={18} />
+      {/* 5. Data Backup, Restore & Danger Zone */}
+      <div className="bg-white/90 dark:bg-slate-900/80 backdrop-blur-md p-5 sm:p-6 rounded-2xl border border-slate-200/70 dark:border-slate-800/80 shadow-[0_2px_16px_rgba(0,0,0,0.03)] space-y-4">
+        <div className="flex items-center gap-2.5 pb-3 border-b border-slate-100 dark:border-slate-800">
+          <Database className="text-indigo-600 dark:text-indigo-400" size={18} />
           <div>
-            <h3 className="text-sm font-bold text-slate-800">Data Storage & Backup</h3>
-            <p className="text-xs text-slate-400">Your data is stored securely in your browser's local storage</p>
+            <h3 className="text-sm font-bold text-slate-800 dark:text-white">Data Storage & Backup</h3>
+            <p className="text-xs text-slate-400 dark:text-slate-500">Your data is stored securely in your browser's local storage</p>
           </div>
         </div>
 
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
           <button
             onClick={exportCSV}
-            className="p-4 border border-slate-200/80 rounded-2xl bg-white hover:bg-slate-50/80 hover:border-slate-300 shadow-2xs hover:shadow-xs flex flex-col items-center justify-center text-center gap-1.5 transition-all active:scale-95"
+            className="p-4 border border-slate-200/80 dark:border-slate-700/80 rounded-2xl bg-white dark:bg-slate-800/80 hover:bg-slate-50/80 dark:hover:bg-slate-700/60 hover:border-slate-300 dark:hover:border-slate-600 shadow-2xs hover:shadow-xs flex flex-col items-center justify-center text-center gap-1.5 transition-all active:scale-95"
           >
-            <Download size={18} className="text-slate-600" />
-            <span className="text-xs font-bold text-slate-800">Export CSV</span>
-            <span className="text-[10px] text-slate-400">Transactions spreadsheet</span>
+            <Download size={18} className="text-slate-600 dark:text-slate-300" />
+            <span className="text-xs font-bold text-slate-800 dark:text-slate-200">Export CSV</span>
+            <span className="text-[10px] text-slate-400 dark:text-slate-500">Transactions spreadsheet</span>
           </button>
 
           <button
             onClick={exportJSON}
-            className="p-4 border border-slate-200/80 rounded-2xl bg-white hover:bg-slate-50/80 hover:border-slate-300 shadow-2xs hover:shadow-xs flex flex-col items-center justify-center text-center gap-1.5 transition-all active:scale-95"
+            className="p-4 border border-slate-200/80 dark:border-slate-700/80 rounded-2xl bg-white dark:bg-slate-800/80 hover:bg-slate-50/80 dark:hover:bg-slate-700/60 hover:border-slate-300 dark:hover:border-slate-600 shadow-2xs hover:shadow-xs flex flex-col items-center justify-center text-center gap-1.5 transition-all active:scale-95"
           >
-            <Download size={18} className="text-slate-600" />
-            <span className="text-xs font-bold text-slate-800">Backup All (JSON)</span>
-            <span className="text-[10px] text-slate-400">Full data snapshot</span>
+            <Download size={18} className="text-slate-600 dark:text-slate-300" />
+            <span className="text-xs font-bold text-slate-800 dark:text-slate-200">Backup All (JSON)</span>
+            <span className="text-[10px] text-slate-400 dark:text-slate-500">Full data snapshot</span>
           </button>
 
           <button
             onClick={() => fileInputRef.current?.click()}
-            className="p-4 border border-slate-200/80 rounded-2xl bg-white hover:bg-slate-50/80 hover:border-slate-300 shadow-2xs hover:shadow-xs flex flex-col items-center justify-center text-center gap-1.5 transition-all active:scale-95"
+            className="p-4 border border-slate-200/80 dark:border-slate-700/80 rounded-2xl bg-white dark:bg-slate-800/80 hover:bg-slate-50/80 dark:hover:bg-slate-700/60 hover:border-slate-300 dark:hover:border-slate-600 shadow-2xs hover:shadow-xs flex flex-col items-center justify-center text-center gap-1.5 transition-all active:scale-95"
           >
-            <Upload size={18} className="text-indigo-600" />
-            <span className="text-xs font-bold text-slate-800">Restore from JSON</span>
-            <span className="text-[10px] text-slate-400">Import backup file</span>
+            <Upload size={18} className="text-indigo-600 dark:text-indigo-400" />
+            <span className="text-xs font-bold text-slate-800 dark:text-slate-200">Restore from JSON</span>
+            <span className="text-[10px] text-slate-400 dark:text-slate-500">Import backup file</span>
           </button>
           <input
             ref={fileInputRef}
@@ -648,10 +703,10 @@ export const SettingsView: React.FC = () => {
           />
         </div>
 
-        <div className="pt-3 border-t border-slate-100 flex flex-col sm:flex-row items-center justify-between gap-3">
+        <div className="pt-3 border-t border-slate-100 dark:border-slate-800 flex flex-col sm:flex-row items-center justify-between gap-3">
           <div>
-            <h4 className="text-xs font-bold text-rose-700">Clear All Transactions</h4>
-            <p className="text-[11px] text-slate-500">
+            <h4 className="text-xs font-bold text-rose-700 dark:text-rose-400">Clear All Transactions</h4>
+            <p className="text-[11px] text-slate-500 dark:text-slate-400">
               Permanently wipe all recorded transactions and start completely fresh.
             </p>
           </div>
@@ -662,7 +717,7 @@ export const SettingsView: React.FC = () => {
                 showNotification('All transactions cleared.');
               }
             }}
-            className="px-4 py-2 bg-rose-50 hover:bg-rose-100 text-rose-700 text-xs font-semibold rounded-xl flex items-center gap-1.5 transition"
+            className="px-4 py-2 bg-rose-50 dark:bg-rose-950/60 hover:bg-rose-100 dark:hover:bg-rose-900/60 text-rose-700 dark:text-rose-300 text-xs font-semibold rounded-xl flex items-center gap-1.5 transition border border-rose-200/60 dark:border-rose-900/60"
           >
             <Trash2 size={14} />
             <span>Wipe Data</span>
