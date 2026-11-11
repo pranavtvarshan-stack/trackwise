@@ -12,7 +12,7 @@ import { TransactionModal } from './components/modals/TransactionModal';
 import { CsvImportModal } from './components/modals/CsvImportModal';
 import { ExportModal } from './components/modals/ExportModal';
 import { Transaction } from './types';
-import { Plus } from 'lucide-react';
+import { Plus, WifiOff } from 'lucide-react';
 
 const MainApp: React.FC = () => {
   const { isExportModalOpen, closeExportModal } = useExpense();
@@ -20,6 +20,19 @@ const MainApp: React.FC = () => {
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [isCsvModalOpen, setIsCsvModalOpen] = useState(false);
   const [transactionToEdit, setTransactionToEdit] = useState<Transaction | null>(null);
+  const [isOffline, setIsOffline] = useState(typeof navigator !== 'undefined' ? !navigator.onLine : false);
+
+  useEffect(() => {
+    const handleOnline = () => setIsOffline(false);
+    const handleOffline = () => setIsOffline(true);
+
+    window.addEventListener('online', handleOnline);
+    window.addEventListener('offline', handleOffline);
+    return () => {
+      window.removeEventListener('online', handleOnline);
+      window.removeEventListener('offline', handleOffline);
+    };
+  }, []);
 
   // Global Keyboard Shortcuts
   useEffect(() => {
@@ -61,6 +74,14 @@ const MainApp: React.FC = () => {
     <div className="min-h-screen bg-[#f8fafc] dark:bg-[#0b0f19] text-slate-800 dark:text-slate-100 flex flex-col font-['Plus_Jakarta_Sans',sans-serif] selection:bg-indigo-100 dark:selection:bg-indigo-900/40 selection:text-indigo-900 dark:selection:text-indigo-200 relative transition-colors duration-200">
       {/* Subtle Ambient Background Glow for Modern Fintech Depth */}
       <div className="fixed top-0 left-1/2 -translate-x-1/2 w-full max-w-7xl h-80 bg-gradient-to-b from-indigo-50/50 via-purple-50/20 to-transparent dark:from-indigo-950/25 dark:via-purple-950/10 dark:to-transparent pointer-events-none -z-10" />
+
+      {/* Offline Status Indicator */}
+      {isOffline && (
+        <div className="fixed bottom-20 left-4 sm:bottom-6 sm:left-6 z-40 px-3.5 py-2 bg-slate-900/95 dark:bg-slate-800/95 text-amber-300 text-xs font-semibold rounded-2xl shadow-xl border border-amber-500/30 backdrop-blur-md flex items-center gap-2 animate-fade-in">
+          <WifiOff size={15} className="text-amber-400 animate-pulse" />
+          <span>Offline Mode — All changes save locally</span>
+        </div>
+      )}
 
       {/* Top Header */}
       <Header

@@ -1,0 +1,43 @@
+{
+  "id": "/",
+  "name": "TrackWise - Personal Wealth & Expense Manager",
+  "short_name": "TrackWise",
+  "description": "Private, fast, and offline-first personal wealth & expense tracker.",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "display_override": ["standalone", "window-controls-overlay"],
+  "orientation": "portrait-primary",
+  "background_color": "#0b0f19",
+  "theme_color": "#4f46e5",
+  "categories": ["finance", "productivity", "utilities"],
+  "icons": [
+    {
+      "src": "/favicon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    },
+    {
+      "src": "/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ],
+  "shortcuts": [
+    {
+      "name": "Add Transaction",
+      "short_name": "Add",
+      "description": "Quickly record an expense or income",
+      "url": "/?action=add",
+      "icons": [{ "src": "/icon-192.png", "sizes": "192x192" }]
+    }
+  ]
+}
