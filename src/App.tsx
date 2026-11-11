@@ -34,6 +34,18 @@ const MainApp: React.FC = () => {
     };
   }, []);
 
+  // Smooth Splash Screen Dismissal
+  useEffect(() => {
+    const splash = document.getElementById('splash-screen');
+    if (splash) {
+      const timer = setTimeout(() => {
+        splash.classList.add('splash-fade-out');
+        setTimeout(() => splash.remove(), 500);
+      }, 400);
+      return () => clearTimeout(timer);
+    }
+  }, []);
+
   // Global Keyboard Shortcuts
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {

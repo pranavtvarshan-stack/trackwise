@@ -15,12 +15,272 @@
     <meta name="mobile-web-app-capable" content="yes" />
     <meta name="format-detection" content="telephone=no" />
     <title>TrackWise | Personal Wealth & Expense Manager</title>
+
+    <!-- Theme Initialization Script to prevent any flash of light/dark mode -->
+    <script>
+      (function() {
+        try {
+          var saved = localStorage.getItem('trackwise_theme');
+          var isDark = saved ? saved === 'dark' : window.matchMedia('(prefers-color-scheme: dark)').matches;
+          if (isDark) {
+            document.documentElement.classList.add('dark');
+          } else {
+            document.documentElement.classList.remove('dark');
+          }
+        } catch (e) {}
+      })();
+    </script>
+
     <!-- Fonts -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+
+    <!-- Splash Screen Critical Styles (Loads in 0ms before JS bundles) -->
+    <style>
+      #splash-screen {
+        position: fixed;
+        inset: 0;
+        z-index: 99999;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: space-between;
+        padding-top: max(2.5rem, env(safe-area-inset-top));
+        padding-bottom: max(2.5rem, env(safe-area-inset-bottom));
+        padding-left: 1.5rem;
+        padding-right: 1.5rem;
+        background-color: #f8fafc;
+        color: #0f172a;
+        user-select: none;
+        overflow: hidden;
+        transition: opacity 0.5s cubic-bezier(0.16, 1, 0.3, 1), transform 0.5s cubic-bezier(0.16, 1, 0.3, 1), visibility 0.5s;
+        font-family: 'Plus Jakarta Sans', system-ui, -apple-system, sans-serif;
+      }
+
+      html.dark #splash-screen {
+        background-color: #0b0f19;
+        color: #f8fafc;
+      }
+
+      #splash-screen.splash-fade-out {
+        opacity: 0;
+        transform: scale(1.04);
+        pointer-events: none;
+        visibility: hidden;
+      }
+
+      .splash-bg-glow {
+        position: absolute;
+        top: 42%;
+        left: 50%;
+        transform: translate(-50%, -50%);
+        width: 340px;
+        height: 340px;
+        background: radial-gradient(circle, rgba(99, 102, 241, 0.28) 0%, rgba(139, 92, 246, 0.12) 50%, transparent 75%);
+        filter: blur(50px);
+        pointer-events: none;
+        animation: splashGlowPulse 3s ease-in-out infinite alternate;
+      }
+
+      html.dark .splash-bg-glow {
+        background: radial-gradient(circle, rgba(99, 102, 241, 0.38) 0%, rgba(139, 92, 246, 0.20) 50%, transparent 75%);
+      }
+
+      .splash-center {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        text-align: center;
+        margin: auto 0;
+        position: relative;
+        z-index: 2;
+      }
+
+      .splash-icon-wrapper {
+        position: relative;
+        margin-bottom: 1.5rem;
+      }
+
+      .splash-icon-ring {
+        position: absolute;
+        inset: -8px;
+        border-radius: 32px;
+        background: linear-gradient(135deg, rgba(99, 102, 241, 0.4), rgba(168, 85, 247, 0.3));
+        filter: blur(8px);
+        animation: splashRingPulse 2s ease-in-out infinite alternate;
+      }
+
+      .splash-icon-box {
+        position: relative;
+        width: 84px;
+        height: 84px;
+        border-radius: 24px;
+        background: linear-gradient(135deg, #4f46e5 0%, #6366f1 50%, #8b5cf6 100%);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        box-shadow: 0 20px 35px -10px rgba(79, 70, 229, 0.45), inset 0 1px 1px rgba(255, 255, 255, 0.35);
+        animation: splashFloat 3s ease-in-out infinite alternate;
+      }
+
+      @media (min-width: 640px) {
+        .splash-icon-box {
+          width: 96px;
+          height: 96px;
+          border-radius: 28px;
+        }
+      }
+
+      .splash-title-row {
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+        margin-bottom: 0.4rem;
+      }
+
+      .splash-title {
+        font-size: 1.85rem;
+        font-weight: 800;
+        letter-spacing: -0.035em;
+        background: linear-gradient(135deg, #0f172a 0%, #312e81 100%);
+        -webkit-background-clip: text;
+        -webkit-text-fill-color: transparent;
+      }
+
+      html.dark .splash-title {
+        background: linear-gradient(135deg, #ffffff 0%, #c7d2fe 100%);
+        -webkit-background-clip: text;
+        -webkit-text-fill-color: transparent;
+      }
+
+      .splash-badge {
+        font-size: 0.65rem;
+        font-weight: 800;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+        padding: 0.15rem 0.55rem;
+        border-radius: 9999px;
+        background: rgba(99, 102, 241, 0.12);
+        color: #4f46e5;
+        border: 1px solid rgba(99, 102, 241, 0.25);
+      }
+
+      html.dark .splash-badge {
+        background: rgba(99, 102, 241, 0.25);
+        color: #a5b4fc;
+        border-color: rgba(99, 102, 241, 0.4);
+      }
+
+      .splash-tagline {
+        font-size: 0.825rem;
+        font-weight: 500;
+        color: #64748b;
+        margin-bottom: 2.25rem;
+        letter-spacing: -0.01em;
+      }
+
+      html.dark .splash-tagline {
+        color: #94a3b8;
+      }
+
+      .splash-loader-track {
+        width: 140px;
+        height: 4px;
+        background: rgba(148, 163, 184, 0.25);
+        border-radius: 9999px;
+        overflow: hidden;
+        position: relative;
+      }
+
+      .splash-loader-bar {
+        position: absolute;
+        top: 0;
+        left: 0;
+        bottom: 0;
+        width: 50%;
+        background: linear-gradient(90deg, #4f46e5, #8b5cf6, #4f46e5);
+        border-radius: 9999px;
+        animation: splashLoaderAnim 1.4s ease-in-out infinite;
+      }
+
+      .splash-footer {
+        display: flex;
+        align-items: center;
+        gap: 0.4rem;
+        font-size: 0.72rem;
+        font-weight: 600;
+        color: #94a3b8;
+        letter-spacing: 0.02em;
+        z-index: 2;
+      }
+
+      html.dark .splash-footer {
+        color: #64748b;
+      }
+
+      @keyframes splashGlowPulse {
+        0% { transform: translate(-50%, -50%) scale(0.9); opacity: 0.6; }
+        100% { transform: translate(-50%, -50%) scale(1.2); opacity: 0.95; }
+      }
+
+      @keyframes splashFloat {
+        0% { transform: translateY(0px); }
+        100% { transform: translateY(-6px); }
+      }
+
+      @keyframes splashRingPulse {
+        0% { opacity: 0.4; transform: scale(0.97); }
+        100% { opacity: 0.8; transform: scale(1.03); }
+      }
+
+      @keyframes splashLoaderAnim {
+        0% { left: -50%; }
+        100% { left: 100%; }
+      }
+    </style>
   </head>
   <body class="bg-slate-50 text-slate-900 antialiased font-['Plus_Jakarta_Sans',sans-serif]">
+    <!-- High-Impact Responsive Splash Screen (Rendered instantly on startup) -->
+    <div id="splash-screen">
+      <div class="splash-bg-glow"></div>
+      
+      <div></div> <!-- Top spacer -->
+
+      <div class="splash-center">
+        <div class="splash-icon-wrapper">
+          <div class="splash-icon-ring"></div>
+          <div class="splash-icon-box">
+            <!-- Iconic Wallet SVG Symbol -->
+            <svg viewBox="0 0 24 24" width="44" height="44" stroke="#ffffff" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M19 7V5a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-2" />
+              <path d="M22 10H16a2 2 0 0 0-2 2v2a2 2 0 0 0 2 2h6" />
+              <circle cx="18" cy="13" r="1" fill="#ffffff" />
+            </svg>
+          </div>
+        </div>
+
+        <div class="splash-title-row">
+          <span class="splash-title">TrackWise</span>
+          <span class="splash-badge">Pro</span>
+        </div>
+
+        <p class="splash-tagline">Personal Wealth & Expense Manager</p>
+
+        <div class="splash-loader-track">
+          <div class="splash-loader-bar"></div>
+        </div>
+      </div>
+
+      <div class="splash-footer">
+        <svg viewBox="0 0 24 24" width="13" height="13" stroke="currentColor" stroke-width="2.5" fill="none" stroke-linecap="round" stroke-linejoin="round">
+          <rect x="3" y="11" width="18" height="11" rx="2" ry="2"/>
+          <path d="M7 11V7a5 5 0 0 1 10 0v4"/>
+        </svg>
+        <span>100% Private • Local-First Security</span>
+      </div>
+    </div>
+
     <div id="root"></div>
     <script type="module" src="/src/main.tsx"></script>
   </body>
