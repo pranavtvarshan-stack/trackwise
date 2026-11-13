@@ -16,9 +16,14 @@ import {
   X,
   Sun,
   Moon,
-  Laptop
+  Laptop,
+  FileSpreadsheet,
+  ExternalLink,
+  LogOut,
+  AlertTriangle
 } from 'lucide-react';
 import { useExpense } from '../../context/ExpenseContext';
+import { useGoogleAuth } from '../../context/GoogleAuthContext';
 import { CURRENCIES } from '../../constants/defaults';
 import { Category, TransactionType, PaymentMethodItem } from '../../types';
 import { CategoryIcon } from '../common/CategoryIcon';
@@ -57,6 +62,15 @@ export const SettingsView: React.FC = () => {
     exportCSV, 
     importJSON 
   } = useExpense();
+
+  const {
+    user,
+    syncInfo,
+    loginWithGoogle,
+    logout,
+    reconnectSync,
+    isTokenExpired
+  } = useGoogleAuth();
 
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
@@ -657,7 +671,92 @@ export const SettingsView: React.FC = () => {
         </div>
       )}
 
-      {/* 5. Data Backup, Restore & Danger Zone */}
+      {/* 5. Google Sheets Cloud Backup */}
+      <div className="bg-white/90 dark:bg-slate-900/80 backdrop-blur-md p-5 sm:p-6 rounded-2xl border border-slate-200/70 dark:border-slate-800/80 shadow-[0_2px_16px_rgba(0,0,0,0.03)] space-y-4">
+        <div className="flex items-center justify-between pb-3 border-b border-slate-100 dark:border-slate-800">
+          <div className="flex items-center gap-2.5">
+            <div className="p-2 rounded-xl bg-emerald-50 dark:bg-emerald-950/60 text-emerald-600 dark:text-emerald-400">
+              <FileSpreadsheet size={18} />
+            </div>
+            <div>
+              <h3 className="text-sm font-bold text-slate-800 dark:text-white">Google Sheets Auto-Backup</h3>
+              <p className="text-xs text-slate-400 dark:text-slate-500">Hybrid local-first cloud backup directly into your Google Drive</p>
+            </div>
+          </div>
+
+          {user && (
+            <span className="hidden sm:inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-semibold bg-emerald-50 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300 border border-emerald-200/60 dark:border-emerald-800/60">
+              <Check size={12} />
+              Connected
+            </span>
+          )}
+        </div>
+
+        {user ? (
+          <div className="space-y-3">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-3 rounded-xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200/70 dark:border-slate-700/70">
+              <div className="flex items-center gap-3">
+                {user.picture ? (
+                  <img src={user.picture} alt={user.name} className="w-10 h-10 rounded-full object-cover" />
+                ) : (
+                  <div className="w-10 h-10 rounded-full bg-indigo-600 text-white font-bold flex items-center justify-center">
+                    {user.name.charAt(0)}
+                  </div>
+                )}
+                <div>
+                  <p className="text-xs font-bold text-slate-800 dark:text-white">{user.name}</p>
+                  <p className="text-[11px] text-slate-400 dark:text-slate-500">{user.email}</p>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-2">
+                {syncInfo.spreadsheetUrl && (
+                  <a
+                    href={syncInfo.spreadsheetUrl}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="flex items-center gap-1.5 px-3 py-1.5 bg-white dark:bg-slate-800 hover:bg-slate-100 dark:hover:bg-slate-700 border border-slate-200 dark:border-slate-700 rounded-xl text-xs font-bold text-emerald-600 dark:text-emerald-400 transition"
+                  >
+                    <ExternalLink size={13} />
+                    <span>Open Sheet</span>
+                  </a>
+                )}
+                <button
+                  onClick={logout}
+                  className="flex items-center gap-1.5 px-3 py-1.5 bg-rose-50 dark:bg-rose-950/60 hover:bg-rose-100 dark:hover:bg-rose-900/60 border border-rose-200 dark:border-rose-800 rounded-xl text-xs font-bold text-rose-600 dark:text-rose-400 transition"
+                >
+                  <LogOut size={13} />
+                  <span>Sign Out</span>
+                </button>
+              </div>
+            </div>
+
+            <div className="flex items-center justify-between text-xs text-slate-500 dark:text-slate-400 pt-1">
+              <span>Last Auto-Synced: <strong className="text-slate-700 dark:text-slate-300">{syncInfo.lastSyncedAt ? new Date(syncInfo.lastSyncedAt).toLocaleString() : 'Pending'}</strong></span>
+              {isTokenExpired && (
+                <button onClick={reconnectSync} className="text-amber-600 dark:text-amber-400 font-bold hover:underline">
+                  Session expired — click to reconnect
+                </button>
+              )}
+            </div>
+          </div>
+        ) : (
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-4 rounded-xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200/70 dark:border-slate-700/70">
+            <div>
+              <p className="text-xs font-bold text-slate-800 dark:text-white">Currently in Offline Mode</p>
+              <p className="text-[11px] text-slate-400 dark:text-slate-500">Sign in to automatically sync your transactions and budgets to your private Google Drive.</p>
+            </div>
+            <button
+              onClick={loginWithGoogle}
+              className="flex items-center justify-center gap-2 px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-bold shadow-sm transition active:scale-95"
+            >
+              <span>Connect Google Drive</span>
+            </button>
+          </div>
+        )}
+      </div>
+
+      {/* 6. Data Backup, Restore & Danger Zone */}
       <div className="bg-white/90 dark:bg-slate-900/80 backdrop-blur-md p-5 sm:p-6 rounded-2xl border border-slate-200/70 dark:border-slate-800/80 shadow-[0_2px_16px_rgba(0,0,0,0.03)] space-y-4">
         <div className="flex items-center gap-2.5 pb-3 border-b border-slate-100 dark:border-slate-800">
           <Database className="text-indigo-600 dark:text-indigo-400" size={18} />

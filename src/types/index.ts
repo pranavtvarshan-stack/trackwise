@@ -31,6 +31,9 @@ export interface Transaction {
   tags?: string[];
   recurringId?: string;
   createdAt: string;
+  updatedAt?: string;
+  isDeleted?: boolean;
+  syncStatus?: 'pending' | 'synced';
 }
 
 export interface Budget {
@@ -38,6 +41,27 @@ export interface Budget {
   categoryId: string;
   monthlyLimit: number;
   alertThresholdPercentage: number; // e.g. 80
+  updatedAt?: string;
+  isDeleted?: boolean;
+  syncStatus?: 'pending' | 'synced';
+}
+
+export interface GoogleUser {
+  id: string;
+  name: string;
+  email: string;
+  picture: string;
+}
+
+export type SyncState = 'idle' | 'syncing' | 'synced' | 'error' | 'token_expired';
+
+export interface GoogleSyncInfo {
+  spreadsheetId: string | null;
+  spreadsheetUrl: string | null;
+  lastSyncedAt: string | null;
+  syncState: SyncState;
+  pendingCount: number;
+  errorMessage?: string;
 }
 
 export interface RecurringTransaction {

@@ -1,5 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { ExpenseProvider, useExpense } from './context/ExpenseContext';
+import { GoogleAuthProvider, useGoogleAuth } from './context/GoogleAuthContext';
+import { LoginPortal } from './components/auth/LoginPortal';
 import { Header } from './components/layout/Header';
 import { Navbar } from './components/layout/Navbar';
 import { OverviewDashboard } from './components/dashboard/OverviewDashboard';
@@ -12,10 +14,22 @@ import { TransactionModal } from './components/modals/TransactionModal';
 import { CsvImportModal } from './components/modals/CsvImportModal';
 import { ExportModal } from './components/modals/ExportModal';
 import { Transaction } from './types';
-import { Plus, WifiOff } from 'lucide-react';
+import { Plus, WifiOff, AlertTriangle } from 'lucide-react';
 
 const MainApp: React.FC = () => {
-  const { isExportModalOpen, closeExportModal } = useExpense();
+  const { user, isOfflineMode, performSync, isTokenExpired, reconnectSync } = useGoogleAuth();
+  const { 
+    isExportModalOpen, 
+    closeExportModal,
+    transactions,
+    budgets,
+    upiBalance,
+    cashBalance,
+    settings,
+    setAllTransactions,
+    setAllBudgets
+  } = useExpense();
+
   const [activeTab, setActiveTab] = useState('dashboard');
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [isCsvModalOpen, setIsCsvModalOpen] = useState(false);
@@ -45,6 +59,44 @@ const MainApp: React.FC = () => {
       return () => clearTimeout(timer);
     }
   }, []);
+
+  // Auto-Sync Debounced Engine: When local state changes and user is logged in
+  useEffect(() => {
+    if (!user || isTokenExpired || !navigator.onLine) return;
+
+    const timer = setTimeout(() => {
+      performSync(
+        transactions,
+        budgets,
+        upiBalance,
+        cashBalance,
+        settings.currency.symbol,
+        (pulled) => {
+          if (pulled.transactions.length > 0) setAllTransactions(pulled.transactions);
+          if (pulled.budgets.length > 0) setAllBudgets(pulled.budgets);
+        }
+      );
+    }, 1500);
+
+    return () => clearTimeout(timer);
+  }, [transactions, budgets, user, isTokenExpired, upiBalance, cashBalance, settings.currency.symbol]);
+
+  // Sync on Reconnecting Online
+  useEffect(() => {
+    const handleOnlineSync = () => {
+      if (user && !isTokenExpired) {
+        performSync(
+          transactions,
+          budgets,
+          upiBalance,
+          cashBalance,
+          settings.currency.symbol
+        );
+      }
+    };
+    window.addEventListener('online', handleOnlineSync);
+    return () => window.removeEventListener('online', handleOnlineSync);
+  }, [user, isTokenExpired, transactions, budgets, upiBalance, cashBalance, settings.currency.symbol]);
 
   // Global Keyboard Shortcuts
   useEffect(() => {
@@ -82,10 +134,31 @@ const MainApp: React.FC = () => {
     setTransactionToEdit(null);
   };
 
+  // If user is neither logged in nor in offline mode, show the entry gate Login Portal
+  if (!user && !isOfflineMode) {
+    return <LoginPortal />;
+  }
+
   return (
     <div className="min-h-screen bg-[#f8fafc] dark:bg-[#0b0f19] text-slate-800 dark:text-slate-100 flex flex-col font-['Plus_Jakarta_Sans',sans-serif] selection:bg-indigo-100 dark:selection:bg-indigo-900/40 selection:text-indigo-900 dark:selection:text-indigo-200 relative transition-colors duration-200">
       {/* Subtle Ambient Background Glow for Modern Fintech Depth */}
       <div className="fixed top-0 left-1/2 -translate-x-1/2 w-full max-w-7xl h-80 bg-gradient-to-b from-indigo-50/50 via-purple-50/20 to-transparent dark:from-indigo-950/25 dark:via-purple-950/10 dark:to-transparent pointer-events-none -z-10" />
+
+      {/* Token Expired Subtle Notice */}
+      {user && isTokenExpired && (
+        <div className="bg-amber-500/95 dark:bg-amber-600/95 text-white text-xs font-semibold px-4 py-2 flex items-center justify-between shadow-sm z-30 transition animate-fade-in">
+          <div className="flex items-center gap-2 mx-auto">
+            <AlertTriangle size={15} />
+            <span>Google Sheets session expired. Changes are saving locally!</span>
+            <button
+              onClick={reconnectSync}
+              className="ml-2 px-2.5 py-0.5 bg-white text-amber-900 rounded-lg text-xs font-bold hover:bg-amber-100 transition shadow-2xs"
+            >
+              Reconnect Sync
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* Offline Status Indicator */}
       {isOffline && (
@@ -187,11 +260,12 @@ const MainApp: React.FC = () => {
 
 export function App() {
   return (
-    <ExpenseProvider>
-      <MainApp />
-    </ExpenseProvider>
+    <GoogleAuthProvider>
+      <ExpenseProvider>
+        <MainApp />
+      </ExpenseProvider>
+    </GoogleAuthProvider>
   );
 }
 
 export default App;
-

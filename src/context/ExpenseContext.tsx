@@ -74,6 +74,8 @@ interface ExpenseContextType {
   addTransaction: (data: Omit<Transaction, 'id' | 'createdAt'>) => void;
   updateTransaction: (id: string, data: Partial<Transaction>) => void;
   deleteTransaction: (id: string) => void;
+  setAllTransactions: (txs: Transaction[]) => void;
+  setAllBudgets: (bds: Budget[]) => void;
 
   // Actions - Categories
   addCategory: (category: Omit<Category, 'id'>) => void;
@@ -251,6 +253,9 @@ export const ExpenseProvider: React.FC<{ children: React.ReactNode }> = ({ child
 
     return transactions
       .filter((tx) => {
+        // Exclude soft-deleted items
+        if (tx.isDeleted) return false;
+
         // Date range filter
         if (startDate || endDate) {
           try {
@@ -335,6 +340,7 @@ export const ExpenseProvider: React.FC<{ children: React.ReactNode }> = ({ child
   // Live Split Wallet Balances (All-time cumulative ledger)
   const upiBalance = useMemo(() => {
     return transactions.reduce((acc, tx) => {
+      if (tx.isDeleted) return acc;
       if (normalizePaymentMethod(tx.paymentMethod) === 'UPI') {
         return tx.type === 'income' ? acc + tx.amount : acc - tx.amount;
       }
@@ -344,6 +350,7 @@ export const ExpenseProvider: React.FC<{ children: React.ReactNode }> = ({ child
 
   const cashBalance = useMemo(() => {
     return transactions.reduce((acc, tx) => {
+      if (tx.isDeleted) return acc;
       if (normalizePaymentMethod(tx.paymentMethod) === 'Cash') {
         return tx.type === 'income' ? acc + tx.amount : acc - tx.amount;
       }
@@ -391,27 +398,48 @@ export const ExpenseProvider: React.FC<{ children: React.ReactNode }> = ({ child
     return { category, amount: maxAmount };
   }, [filteredTransactions, categories]);
 
+  // Helper for generating standard UUIDs
+  const generateUUID = () => {
+    if (typeof crypto !== 'undefined' && crypto.randomUUID) {
+      return crypto.randomUUID();
+    }
+    return `tx_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`;
+  };
+
   // Transaction Actions
   const addTransaction = (data: Omit<Transaction, 'id' | 'createdAt'>) => {
+    const now = new Date().toISOString();
     const newTx: Transaction = {
       ...data,
       paymentMethod: normalizePaymentMethod(data.paymentMethod),
-      id: `tx_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
-      createdAt: new Date().toISOString(),
+      id: generateUUID(),
+      createdAt: now,
+      updatedAt: now,
+      isDeleted: false,
+      syncStatus: 'pending',
     };
     setTransactions(prev => [newTx, ...prev]);
   };
 
   const updateTransaction = (id: string, data: Partial<Transaction>) => {
+    const now = new Date().toISOString();
     setTransactions(prev => prev.map(tx => (tx.id === id ? { 
       ...tx, 
       ...data,
-      paymentMethod: data.paymentMethod ? normalizePaymentMethod(data.paymentMethod) : tx.paymentMethod
+      paymentMethod: data.paymentMethod ? normalizePaymentMethod(data.paymentMethod) : tx.paymentMethod,
+      updatedAt: now,
+      syncStatus: 'pending',
     } : tx)));
   };
 
   const deleteTransaction = (id: string) => {
-    setTransactions(prev => prev.filter(tx => tx.id !== id));
+    const now = new Date().toISOString();
+    setTransactions(prev => prev.map(tx => (tx.id === id ? {
+      ...tx,
+      isDeleted: true,
+      updatedAt: now,
+      syncStatus: 'pending',
+    } : tx)));
   };
 
   // Category Actions
@@ -646,6 +674,8 @@ export const ExpenseProvider: React.FC<{ children: React.ReactNode }> = ({ child
         addTransaction,
         updateTransaction,
         deleteTransaction,
+        setAllTransactions: setTransactions,
+        setAllBudgets: setBudgets,
         addCategory,
         updateCategory,
         deleteCategory,

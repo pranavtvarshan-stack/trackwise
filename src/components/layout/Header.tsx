@@ -6,9 +6,16 @@ import {
   Upload, 
   Bell, 
   Sun,
-  Moon
+  Moon,
+  RefreshCw,
+  Check,
+  AlertTriangle,
+  ExternalLink,
+  LogOut,
+  FileSpreadsheet
 } from 'lucide-react';
 import { useExpense } from '../../context/ExpenseContext';
+import { useGoogleAuth } from '../../context/GoogleAuthContext';
 
 interface HeaderProps {
   onOpenAddModal: () => void;
@@ -23,10 +30,29 @@ export const Header: React.FC<HeaderProps> = ({ onOpenAddModal, onNavigateToTab,
     exportCSV, 
     importJSON,
     isDark,
-    toggleTheme
+    toggleTheme,
+    transactions,
+    budgets,
+    upiBalance,
+    cashBalance,
+    settings,
+    setAllTransactions,
+    setAllBudgets
   } = useExpense();
 
+  const {
+    user,
+    syncInfo,
+    reconnectSync,
+    isTokenExpired,
+    loginWithGoogle,
+    logout,
+    performSync
+  } = useGoogleAuth();
+
   const [showExportMenu, setShowExportMenu] = useState(false);
+  const [showUserMenu, setShowUserMenu] = useState(false);
+  const [manualSyncing, setManualSyncing] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Check how many recurring bills are due today or overdue
@@ -50,10 +76,26 @@ export const Header: React.FC<HeaderProps> = ({ onOpenAddModal, onNavigateToTab,
       };
       reader.readAsText(file);
     }
-    // reset input
     if (fileInputRef.current) {
       fileInputRef.current.value = '';
     }
+  };
+
+  const handleManualSync = async () => {
+    setManualSyncing(true);
+    await performSync(
+      transactions,
+      budgets,
+      upiBalance,
+      cashBalance,
+      settings.currency.symbol,
+      (pulled) => {
+        if (pulled.transactions.length > 0) setAllTransactions(pulled.transactions);
+        if (pulled.budgets.length > 0) setAllBudgets(pulled.budgets);
+      }
+    );
+    setManualSyncing(false);
+    setShowUserMenu(false);
   };
 
   return (
@@ -82,7 +124,7 @@ export const Header: React.FC<HeaderProps> = ({ onOpenAddModal, onNavigateToTab,
 
           {/* Right Action Items */}
           <div className="flex items-center gap-1.5 sm:gap-2.5">
-            {/* Currency Indicator (Shown on tablet/desktop, hidden on crowded mobile) */}
+            {/* Currency Indicator */}
             <div 
               className="hidden sm:flex items-center gap-1 px-2.5 py-1.5 bg-slate-100/80 dark:bg-slate-800/80 hover:bg-slate-200/60 dark:hover:bg-slate-700/60 text-slate-700 dark:text-slate-200 rounded-xl text-[11px] sm:text-xs font-bold border border-slate-200/70 dark:border-slate-700/70 select-none shadow-2xs transition"
               title="Default Currency: Indian Rupee (₹ INR)"
@@ -90,6 +132,119 @@ export const Header: React.FC<HeaderProps> = ({ onOpenAddModal, onNavigateToTab,
               <span className="text-indigo-600 dark:text-indigo-400 font-extrabold">₹</span>
               <span className="tracking-wide">INR</span>
             </div>
+
+            {/* Google Sheets Sync Pill / Indicator */}
+            {user ? (
+              <>
+                {syncInfo.syncState === 'syncing' || manualSyncing ? (
+                  <div className="flex items-center gap-1 px-2 py-1 sm:px-2.5 sm:py-1.5 rounded-xl bg-indigo-50 dark:bg-indigo-950/60 border border-indigo-200/80 dark:border-indigo-800/80 text-indigo-700 dark:text-indigo-300 text-[11px] font-bold">
+                    <RefreshCw size={12} className="animate-spin text-indigo-600 dark:text-indigo-400" />
+                    <span className="hidden sm:inline">Syncing...</span>
+                  </div>
+                ) : isTokenExpired || syncInfo.syncState === 'token_expired' ? (
+                  <button
+                    onClick={reconnectSync}
+                    className="flex items-center gap-1 px-2 py-1 sm:px-2.5 sm:py-1.5 rounded-xl bg-amber-50 dark:bg-amber-950/60 border border-amber-200/80 dark:border-amber-800/80 text-amber-800 dark:text-amber-200 text-[11px] font-bold shadow-2xs transition hover:bg-amber-100"
+                    title="Google Token Expired. Tap to reconnect Google Sheets sync"
+                  >
+                    <AlertTriangle size={12} className="text-amber-600 dark:text-amber-400" />
+                    <span>Reconnect</span>
+                  </button>
+                ) : (
+                  <div 
+                    className="hidden lg:flex items-center gap-1 px-2 py-1 rounded-xl bg-emerald-50 dark:bg-emerald-950/50 border border-emerald-200/60 dark:border-emerald-800/60 text-emerald-700 dark:text-emerald-300 text-[11px] font-semibold"
+                    title={`Google Sheet Synced at ${syncInfo.lastSyncedAt ? new Date(syncInfo.lastSyncedAt).toLocaleTimeString() : 'Recently'}`}
+                  >
+                    <Check size={12} className="text-emerald-600 dark:text-emerald-400" />
+                    <span>Synced</span>
+                  </div>
+                )}
+
+                {/* User Profile Dropdown Button */}
+                <div className="relative">
+                  <button
+                    onClick={() => setShowUserMenu(!showUserMenu)}
+                    className="flex items-center gap-1.5 p-1 rounded-xl border border-slate-200/70 dark:border-slate-700/80 hover:border-slate-300 dark:hover:border-slate-600 transition bg-white/50 dark:bg-slate-800/50 shadow-2xs"
+                    title={`${user.name} (${user.email})`}
+                  >
+                    {user.picture ? (
+                      <img src={user.picture} alt={user.name} className="w-7 h-7 rounded-lg object-cover" />
+                    ) : (
+                      <div className="w-7 h-7 rounded-lg bg-indigo-600 text-white font-bold text-xs flex items-center justify-center">
+                        {user.name.charAt(0).toUpperCase()}
+                      </div>
+                    )}
+                  </button>
+
+                  {showUserMenu && (
+                    <>
+                      <div className="fixed inset-0 z-40" onClick={() => setShowUserMenu(false)} />
+                      <div className="absolute right-0 mt-2 w-64 bg-white/95 dark:bg-slate-900/95 backdrop-blur-2xl rounded-2xl shadow-2xl border border-slate-200/80 dark:border-slate-800 py-2.5 z-50 text-xs animate-fade-in divide-y divide-slate-100 dark:divide-slate-800">
+                        {/* User Identity Header */}
+                        <div className="px-4 py-2">
+                          <p className="font-bold text-slate-800 dark:text-white truncate">{user.name}</p>
+                          <p className="text-[11px] text-slate-400 dark:text-slate-500 truncate">{user.email}</p>
+                        </div>
+
+                        {/* Actions */}
+                        <div className="py-1">
+                          {syncInfo.spreadsheetUrl && (
+                            <a
+                              href={syncInfo.spreadsheetUrl}
+                              target="_blank"
+                              rel="noreferrer"
+                              className="w-full text-left px-4 py-2 hover:bg-indigo-50/50 dark:hover:bg-indigo-950/40 flex items-center gap-2.5 text-slate-700 dark:text-slate-200 font-medium transition"
+                            >
+                              <FileSpreadsheet size={14} className="text-emerald-600 dark:text-emerald-400" />
+                              <span>Open Google Sheet</span>
+                              <ExternalLink size={12} className="text-slate-400 ml-auto" />
+                            </a>
+                          )}
+                          <button
+                            onClick={handleManualSync}
+                            disabled={manualSyncing}
+                            className="w-full text-left px-4 py-2 hover:bg-slate-50 dark:hover:bg-slate-800/50 flex items-center gap-2.5 text-slate-700 dark:text-slate-200 font-medium transition"
+                          >
+                            <RefreshCw size={14} className={`text-indigo-600 dark:text-indigo-400 ${manualSyncing ? 'animate-spin' : ''}`} />
+                            <span>Sync Now</span>
+                          </button>
+                        </div>
+
+                        {/* Sign Out */}
+                        <div className="py-1">
+                          <button
+                            onClick={() => {
+                              logout();
+                              setShowUserMenu(false);
+                            }}
+                            className="w-full text-left px-4 py-2 hover:bg-rose-50 dark:hover:bg-rose-950/40 flex items-center gap-2.5 text-rose-600 dark:text-rose-400 font-medium transition"
+                          >
+                            <LogOut size={14} />
+                            <span>Sign Out</span>
+                          </button>
+                        </div>
+                      </div>
+                    </>
+                  )}
+                </div>
+              </>
+            ) : (
+              /* Offline Mode: Sign In to Backup Button */
+              <button
+                onClick={loginWithGoogle}
+                className="flex items-center gap-1.5 px-2.5 py-1.5 sm:px-3 sm:py-2 bg-white dark:bg-slate-800 hover:bg-slate-50 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 border border-slate-200/80 dark:border-slate-700/80 rounded-xl text-xs font-bold transition shadow-2xs active:scale-95"
+                title="Sign in with Google to auto-sync with Google Sheets"
+              >
+                <svg className="w-3.5 h-3.5 flex-shrink-0" viewBox="0 0 24 24">
+                  <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" />
+                  <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" />
+                  <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.06H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.94l2.85-2.22.81-.63z" />
+                  <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.06l3.66 2.84c.87-2.6 3.3-4.52 6.16-4.52z" />
+                </svg>
+                <span className="hidden sm:inline">Sign in to Backup</span>
+                <span className="sm:hidden">Backup</span>
+              </button>
+            )}
 
             {/* Dark / Light Mode Toggle Button */}
             <button
