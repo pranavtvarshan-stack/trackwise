@@ -8,7 +8,9 @@ import {
   Calendar,
   AlertTriangle,
   ChevronRight,
-  Filter
+  Filter,
+  Smartphone,
+  Banknote
 } from 'lucide-react';
 import { useExpense } from '../../context/ExpenseContext';
 import { formatCurrency, formatDateDisplay, formatPercentage } from '../../utils/formatters';
@@ -60,6 +62,8 @@ export const OverviewDashboard: React.FC<OverviewDashboardProps> = ({
     netSavings, 
     savingsRate,
     topSpendingCategory,
+    upiBalance,
+    cashBalance,
     isDark
   } = useExpense();
 
@@ -253,6 +257,33 @@ export const OverviewDashboard: React.FC<OverviewDashboardProps> = ({
             <span className={`font-bold px-1.5 py-0.5 rounded-md ${savingsRate >= 20 ? 'bg-emerald-50 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300' : 'bg-amber-50 dark:bg-amber-950/60 text-amber-700 dark:text-amber-300'}`}>
               {formatPercentage(savingsRate)}
             </span>
+          </div>
+
+          {/* Split Wallets (UPI vs Liquid Cash) */}
+          <div className="mt-3 pt-3 border-t border-slate-100 dark:border-slate-800/80 grid grid-cols-2 gap-1.5 sm:gap-2">
+            <div className="flex items-center gap-1.5 p-1.5 rounded-xl bg-indigo-50/70 dark:bg-indigo-950/50 border border-indigo-100/70 dark:border-indigo-900/40 min-w-0" title="Cumulative UPI / Online Balance">
+              <div className="w-5 h-5 rounded-lg bg-indigo-600 text-white flex items-center justify-center flex-shrink-0 shadow-2xs">
+                <Smartphone size={11} />
+              </div>
+              <div className="min-w-0">
+                <p className="text-[9px] font-extrabold uppercase tracking-wider text-indigo-700 dark:text-indigo-300 truncate">UPI</p>
+                <p className="text-[11px] sm:text-xs font-black text-slate-900 dark:text-white truncate">
+                  {formatCurrency(upiBalance, settings.currency, false)}
+                </p>
+              </div>
+            </div>
+
+            <div className="flex items-center gap-1.5 p-1.5 rounded-xl bg-emerald-50/70 dark:bg-emerald-950/50 border border-emerald-100/70 dark:border-emerald-900/40 min-w-0" title="Cumulative Liquid Cash in Hand">
+              <div className="w-5 h-5 rounded-lg bg-emerald-600 text-white flex items-center justify-center flex-shrink-0 shadow-2xs">
+                <Banknote size={11} />
+              </div>
+              <div className="min-w-0">
+                <p className="text-[9px] font-extrabold uppercase tracking-wider text-emerald-700 dark:text-emerald-300 truncate">Cash</p>
+                <p className={`text-[11px] sm:text-xs font-black truncate ${cashBalance < 0 ? 'text-rose-600 dark:text-rose-400' : 'text-slate-900 dark:text-white'}`}>
+                  {formatCurrency(cashBalance, settings.currency, false)}
+                </p>
+              </div>
+            </div>
           </div>
         </div>
 

@@ -1,10 +1,11 @@
 import React, { useState, useEffect } from 'react';
-import { X, Upload, Trash2, Plus, Tag as TagIcon } from 'lucide-react';
+import { X, Upload, Trash2, Plus, Tag as TagIcon, Smartphone, Banknote } from 'lucide-react';
 import { useExpense } from '../../context/ExpenseContext';
 import { Category, PaymentMethod, Transaction, TransactionType } from '../../types';
 import { PAYMENT_METHODS } from '../../constants/defaults';
 import { CategoryIcon } from '../common/CategoryIcon';
 import { format } from 'date-fns';
+import { normalizePaymentMethod } from '../../utils/formatters';
 
 interface TransactionModalProps {
   isOpen: boolean;
@@ -43,7 +44,7 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({
       setAmount(transactionToEdit.amount.toString());
       setCategoryId(transactionToEdit.categoryId);
       setDate(transactionToEdit.date);
-      setPaymentMethod(transactionToEdit.paymentMethod);
+      setPaymentMethod(normalizePaymentMethod(transactionToEdit.paymentMethod));
       setNotes(transactionToEdit.notes || '');
       setReceiptUrl(transactionToEdit.receiptUrl);
       setTags(transactionToEdit.tags || []);
@@ -52,7 +53,7 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({
       setTitle('');
       setAmount('');
       setDate(format(new Date(), 'yyyy-MM-dd'));
-      setPaymentMethod(paymentMethods[0]?.id || 'upi');
+      setPaymentMethod('UPI');
       setNotes('');
       setReceiptUrl(undefined);
       setTags([]);
@@ -273,27 +274,37 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({
             </select>
           </div>
 
-          {/* Payment Method */}
+          {/* Payment Method / Wallet Toggle */}
           <div>
             <label className="block text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400 mb-1.5">
-              Payment Method
+              Payment Method / Wallet *
             </label>
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-              {paymentMethods.map((pm) => (
-                <button
-                  type="button"
-                  key={pm.id}
-                  onClick={() => setPaymentMethod(pm.id)}
-                  className={`px-3 py-2 text-xs font-medium rounded-xl border flex items-center justify-center gap-1.5 transition ${
-                    paymentMethod === pm.id
-                      ? 'border-indigo-600 bg-indigo-50 dark:bg-indigo-950/60 text-indigo-700 dark:text-indigo-300 font-semibold shadow-sm'
-                      : 'border-slate-200 dark:border-slate-700 hover:border-slate-300 dark:hover:border-slate-600 text-slate-600 dark:text-slate-300 bg-white dark:bg-slate-800'
-                  }`}
-                >
-                  <CategoryIcon name={pm.icon} size={14} />
-                  <span className="truncate">{pm.label}</span>
-                </button>
-              ))}
+            <div className="grid grid-cols-2 gap-2 p-1 bg-slate-100/90 dark:bg-slate-800/90 rounded-2xl border border-slate-200/70 dark:border-slate-700/70">
+              <button
+                type="button"
+                onClick={() => setPaymentMethod('UPI')}
+                className={`py-2 px-3 text-xs sm:text-sm font-bold rounded-xl flex items-center justify-center gap-2 transition-all ${
+                  paymentMethod === 'UPI'
+                    ? 'bg-white dark:bg-slate-900 text-indigo-600 dark:text-indigo-400 shadow-xs border border-slate-200/60 dark:border-slate-700/60 ring-2 ring-indigo-500/10'
+                    : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
+                }`}
+              >
+                <Smartphone size={15} className={paymentMethod === 'UPI' ? 'text-indigo-600 dark:text-indigo-400' : 'text-slate-400'} />
+                <span>UPI / Online</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setPaymentMethod('Cash')}
+                className={`py-2 px-3 text-xs sm:text-sm font-bold rounded-xl flex items-center justify-center gap-2 transition-all ${
+                  paymentMethod === 'Cash'
+                    ? 'bg-white dark:bg-slate-900 text-emerald-600 dark:text-emerald-400 shadow-xs border border-slate-200/60 dark:border-slate-700/60 ring-2 ring-emerald-500/10'
+                    : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
+                }`}
+              >
+                <Banknote size={15} className={paymentMethod === 'Cash' ? 'text-emerald-600 dark:text-emerald-400' : 'text-slate-400'} />
+                <span>Liquid Cash</span>
+              </button>
             </div>
           </div>
 

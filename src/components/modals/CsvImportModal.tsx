@@ -28,7 +28,7 @@ export const CsvImportModal: React.FC<CsvImportModalProps> = ({ isOpen, onClose 
   const [amountCol, setAmountCol] = useState<number>(1);
   const [dateCol, setDateCol] = useState<number>(2);
   const [defaultCategory, setDefaultCategory] = useState<string>(categories[0]?.id || '');
-  const [defaultPaymentMethod, setDefaultPaymentMethod] = useState<string>(paymentMethods[0]?.id || '');
+  const [defaultPaymentMethod, setDefaultPaymentMethod] = useState<string>('UPI');
   const [defaultType, setDefaultType] = useState<'expense' | 'income'>('expense');
 
   const [importSummary, setImportSummary] = useState<string | null>(null);
@@ -309,18 +309,15 @@ export const CsvImportModal: React.FC<CsvImportModalProps> = ({ isOpen, onClose 
 
                   <div>
                     <label className="block text-[11px] font-semibold text-slate-500 dark:text-slate-400 mb-1">
-                      Payment Mode
+                      Payment Wallet
                     </label>
                     <select
                       value={defaultPaymentMethod}
                       onChange={(e) => setDefaultPaymentMethod(e.target.value)}
                       className="w-full p-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg text-xs font-semibold text-slate-800 dark:text-white outline-none"
                     >
-                      {paymentMethods.map((pm) => (
-                        <option key={pm.id} value={pm.id}>
-                          {pm.label}
-                        </option>
-                      ))}
+                      <option value="UPI">⚡ UPI / Online</option>
+                      <option value="Cash">💵 Liquid Cash</option>
                     </select>
                   </div>
                 </div>

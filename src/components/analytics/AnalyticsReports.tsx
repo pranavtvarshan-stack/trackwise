@@ -8,7 +8,7 @@ import {
   FileDown
 } from 'lucide-react';
 import { useExpense } from '../../context/ExpenseContext';
-import { formatCurrency, formatPercentage } from '../../utils/formatters';
+import { formatCurrency, formatPercentage, normalizePaymentMethod } from '../../utils/formatters';
 import { PAYMENT_METHODS } from '../../constants/defaults';
 import { CategoryIcon } from '../common/CategoryIcon';
 import { 
@@ -67,28 +67,32 @@ export const AnalyticsReports: React.FC = () => {
       .sort((a, b) => b.total - a.total);
   }, [filteredTransactions, categoryMap, totalExpenses]);
 
-  // Payment method distribution
+  // Payment method distribution (Split UPI vs Cash)
   const paymentMethodData = useMemo(() => {
     const map: Record<string, number> = {};
     filteredTransactions
       .filter((t) => t.type === 'expense')
       .forEach((t) => {
-        map[t.paymentMethod] = (map[t.paymentMethod] || 0) + t.amount;
+        const pmKey = normalizePaymentMethod(t.paymentMethod);
+        map[pmKey] = (map[pmKey] || 0) + t.amount;
       });
 
-    const colors = ['#6366f1', '#10b981', '#f59e0b', '#ec4899', '#06b6d4', '#8b5cf6', '#ef4444', '#64748b'];
+    const pmColorMap: Record<string, string> = {
+      UPI: '#6366f1',
+      Cash: '#10b981',
+    };
 
     return Object.entries(map)
-      .map(([pmId, amount], idx) => {
-        const pm = paymentMethods.find((p) => p.id === pmId);
+      .map(([pmId, amount]) => {
+        const label = pmId === 'UPI' ? 'UPI / Online' : pmId === 'Cash' ? 'Liquid Cash' : pmId;
         return {
-          name: pm?.label || pmId,
+          name: label,
           value: Math.round(amount * 100) / 100,
-          color: colors[idx % colors.length],
+          color: pmColorMap[pmId] || '#64748b',
         };
       })
       .sort((a, b) => b.value - a.value);
-  }, [filteredTransactions, paymentMethods]);
+  }, [filteredTransactions]);
 
   // Day of week spending analysis
   const dayOfWeekData = useMemo(() => {

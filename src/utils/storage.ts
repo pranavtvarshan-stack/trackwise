@@ -7,6 +7,7 @@ import {
   PaymentMethodItem
 } from '../types';
 import { format } from 'date-fns';
+import { normalizePaymentMethod } from './formatters';
 import { 
   DEFAULT_CATEGORIES, 
   DEFAULT_PAYMENT_METHODS,
@@ -29,12 +30,19 @@ const STORAGE_KEYS = {
 export const getStoredTransactions = (): Transaction[] => {
   const data = localStorage.getItem(STORAGE_KEYS.TRANSACTIONS);
   if (!data) {
-    const sample = generateSampleTransactions();
+    const sample = generateSampleTransactions().map(tx => ({
+      ...tx,
+      paymentMethod: normalizePaymentMethod(tx.paymentMethod)
+    }));
     localStorage.setItem(STORAGE_KEYS.TRANSACTIONS, JSON.stringify(sample));
     return sample;
   }
   try {
-    return JSON.parse(data);
+    const parsed: Transaction[] = JSON.parse(data);
+    return parsed.map(tx => ({
+      ...tx,
+      paymentMethod: normalizePaymentMethod(tx.paymentMethod)
+    }));
   } catch (e) {
     console.error('Failed to parse transactions', e);
     return [];
@@ -99,11 +107,19 @@ export const saveBudgets = (budgets: Budget[]): void => {
 export const getStoredRecurring = (): RecurringTransaction[] => {
   const data = localStorage.getItem(STORAGE_KEYS.RECURRING);
   if (!data) {
-    localStorage.setItem(STORAGE_KEYS.RECURRING, JSON.stringify(INITIAL_RECURRING));
-    return INITIAL_RECURRING;
+    const sample = INITIAL_RECURRING.map(rec => ({
+      ...rec,
+      paymentMethod: normalizePaymentMethod(rec.paymentMethod)
+    }));
+    localStorage.setItem(STORAGE_KEYS.RECURRING, JSON.stringify(sample));
+    return sample;
   }
   try {
-    return JSON.parse(data);
+    const parsed: RecurringTransaction[] = JSON.parse(data);
+    return parsed.map(rec => ({
+      ...rec,
+      paymentMethod: normalizePaymentMethod(rec.paymentMethod)
+    }));
   } catch {
     return INITIAL_RECURRING;
   }
@@ -308,7 +324,7 @@ export const exportFullReportAsCSV = ({
   lines.push(`"Title","Amount (${sym})","Frequency","Category","Payment Method","Next Due Date","Status","Notes"`);
   recurring.forEach((r) => {
     const catName = categoryMap.get(r.categoryId)?.name || 'Category';
-    const pmName = pmMap.get(r.paymentMethod) || r.paymentMethod;
+    const pmName = normalizePaymentMethod(r.paymentMethod);
     const status = r.active ? 'Active' : 'Paused';
     const notes = (r.notes || '').replace(/"/g, '""');
     lines.push(`"${r.title.replace(/"/g, '""')}",${r.amount},"${r.frequency}","${catName}","${pmName}","${r.nextDueDate}","${status}","${notes}"`);
@@ -320,7 +336,7 @@ export const exportFullReportAsCSV = ({
   lines.push(`"ID","Date","Title","Type","Category","Amount (${sym})","Payment Method","Notes","Tags"`);
   transactions.forEach((t) => {
     const catName = categoryMap.get(t.categoryId)?.name || 'Uncategorized';
-    const pmName = pmMap.get(t.paymentMethod) || t.paymentMethod;
+    const pmName = normalizePaymentMethod(t.paymentMethod);
     const tags = (t.tags || []).join(';');
     const notes = (t.notes || '').replace(/"/g, '""');
     const title = t.title.replace(/"/g, '""');
@@ -370,7 +386,7 @@ export const exportTransactionsAsCSV = (
   // Table Rows
   transactions.forEach(t => {
     const catName = categoryMap.get(t.categoryId) || 'Uncategorized';
-    const pmName = pmMap.get(t.paymentMethod) || t.paymentMethod.replace('_', ' ');
+    const pmName = normalizePaymentMethod(t.paymentMethod);
     const tags = (t.tags || []).join(';');
     const notes = (t.notes || '').replace(/"/g, '""');
     const title = t.title.replace(/"/g, '""');

@@ -11,12 +11,14 @@ import {
   Tag as TagIcon,
   X,
   FileSpreadsheet,
-  RotateCcw
+  RotateCcw,
+  Smartphone,
+  Banknote
 } from 'lucide-react';
 import { useExpense } from '../../context/ExpenseContext';
 import { Transaction, PaymentMethod } from '../../types';
 import { PAYMENT_METHODS } from '../../constants/defaults';
-import { formatCurrency, formatDateDisplay } from '../../utils/formatters';
+import { formatCurrency, formatDateDisplay, normalizePaymentMethod } from '../../utils/formatters';
 import { CategoryIcon } from '../common/CategoryIcon';
 
 interface TransactionListProps {
@@ -191,12 +193,9 @@ export const TransactionList: React.FC<TransactionListProps> = ({
               onChange={(e) => setFilters((prev) => ({ ...prev, paymentMethod: e.target.value }))}
               className="w-full p-2 bg-slate-50 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700/80 rounded-xl font-medium text-slate-700 dark:text-slate-300 outline-none"
             >
-              <option value="all">All Payment Modes</option>
-              {paymentMethods.map((pm) => (
-                <option key={pm.id} value={pm.id}>
-                  {pm.label}
-                </option>
-              ))}
+              <option value="all">All Wallets</option>
+              <option value="UPI">⚡ UPI / Online</option>
+              <option value="Cash">💵 Liquid Cash</option>
             </select>
           </div>
 
@@ -324,7 +323,17 @@ export const TransactionList: React.FC<TransactionListProps> = ({
                           <div className="flex flex-wrap items-center gap-x-1.5 sm:gap-x-2 gap-y-0.5 mt-0.5 text-[11px] sm:text-xs text-slate-500 dark:text-slate-400">
                             <span className="font-medium text-slate-600 dark:text-slate-300">{cat?.name || 'Uncategorized'}</span>
                             <span>•</span>
-                            <span className="capitalize">{tx.paymentMethod.replace('_', ' ')}</span>
+                            {normalizePaymentMethod(tx.paymentMethod) === 'Cash' ? (
+                              <span className="inline-flex items-center gap-1 px-1.5 py-0.2 rounded-md font-bold text-[10px] bg-emerald-50 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300 border border-emerald-200/60 dark:border-emerald-800/60">
+                                <Banknote size={10} />
+                                Cash
+                              </span>
+                            ) : (
+                              <span className="inline-flex items-center gap-1 px-1.5 py-0.2 rounded-md font-bold text-[10px] bg-indigo-50 dark:bg-indigo-950/60 text-indigo-700 dark:text-indigo-300 border border-indigo-200/60 dark:border-indigo-800/60">
+                                <Smartphone size={10} />
+                                UPI
+                              </span>
+                            )}
 
                             {tx.notes && (
                               <>

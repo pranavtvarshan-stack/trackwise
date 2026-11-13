@@ -14,13 +14,8 @@ export const CURRENCIES: Currency[] = [
 ];
 
 export const DEFAULT_PAYMENT_METHODS: PaymentMethodItem[] = [
-  { id: 'upi', label: 'UPI / Fast Pay', icon: 'Smartphone', isDefault: true },
-  { id: 'credit_card', label: 'Credit Card', icon: 'CreditCard', isDefault: true },
-  { id: 'debit_card', label: 'Debit Card', icon: 'CreditCard', isDefault: true },
-  { id: 'bank_transfer', label: 'Bank Transfer', icon: 'Building2', isDefault: true },
-  { id: 'cash', label: 'Cash', icon: 'Banknote', isDefault: true },
-  { id: 'paypal', label: 'PayPal', icon: 'Wallet', isDefault: true },
-  { id: 'other', label: 'Other', icon: 'HelpCircle', isDefault: true },
+  { id: 'UPI', label: 'UPI / Online', icon: 'Smartphone', isDefault: true },
+  { id: 'Cash', label: 'Liquid Cash', icon: 'Banknote', isDefault: false },
 ];
 
 export const PAYMENT_METHODS = DEFAULT_PAYMENT_METHODS;

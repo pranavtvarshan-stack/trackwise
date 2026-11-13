@@ -31,3 +31,9 @@ export const formatPercentage = (value: number): string => {
   return `${Math.round(value)}%`;
 };
 
+export const normalizePaymentMethod = (pm?: string | null): 'UPI' | 'Cash' => {
+  if (!pm) return 'UPI';
+  const clean = pm.trim().toLowerCase();
+  return clean === 'cash' ? 'Cash' : 'UPI';
+};
+

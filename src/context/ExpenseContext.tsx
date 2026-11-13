@@ -44,6 +44,7 @@ import {
   addYears,
   format
 } from 'date-fns';
+import { normalizePaymentMethod } from '../utils/formatters';
 
 interface ExpenseContextType {
   // State
@@ -62,6 +63,12 @@ interface ExpenseContextType {
   netSavings: number;
   savingsRate: number;
   topSpendingCategory: { category: Category | null; amount: number };
+
+  // Live Split Balances (UPI vs Liquid Cash)
+  upiBalance: number;
+  cashBalance: number;
+  filteredUpiBalance: number;
+  filteredCashBalance: number;
   
   // Actions - Transactions
   addTransaction: (data: Omit<Transaction, 'id' | 'createdAt'>) => void;
@@ -270,9 +277,13 @@ export const ExpenseProvider: React.FC<{ children: React.ReactNode }> = ({ child
           return false;
         }
 
-        // Payment method filter
-        if (filters.paymentMethod !== 'all' && tx.paymentMethod !== filters.paymentMethod) {
-          return false;
+        // Payment method filter (supports 'all', 'UPI', 'Cash' and legacy IDs)
+        if (filters.paymentMethod !== 'all') {
+          const txPm = normalizePaymentMethod(tx.paymentMethod);
+          const filterPm = normalizePaymentMethod(filters.paymentMethod);
+          if (txPm !== filterPm && tx.paymentMethod !== filters.paymentMethod) {
+            return false;
+          }
         }
 
         // Search query filter (matches title, notes, or tags)
@@ -321,6 +332,44 @@ export const ExpenseProvider: React.FC<{ children: React.ReactNode }> = ({ child
   const netSavings = totalIncome - totalExpenses;
   const savingsRate = totalIncome > 0 ? Math.max(0, (netSavings / totalIncome) * 100) : 0;
 
+  // Live Split Wallet Balances (All-time cumulative ledger)
+  const upiBalance = useMemo(() => {
+    return transactions.reduce((acc, tx) => {
+      if (normalizePaymentMethod(tx.paymentMethod) === 'UPI') {
+        return tx.type === 'income' ? acc + tx.amount : acc - tx.amount;
+      }
+      return acc;
+    }, 0);
+  }, [transactions]);
+
+  const cashBalance = useMemo(() => {
+    return transactions.reduce((acc, tx) => {
+      if (normalizePaymentMethod(tx.paymentMethod) === 'Cash') {
+        return tx.type === 'income' ? acc + tx.amount : acc - tx.amount;
+      }
+      return acc;
+    }, 0);
+  }, [transactions]);
+
+  // Period Split Balances (Based on filtered period)
+  const filteredUpiBalance = useMemo(() => {
+    return filteredTransactions.reduce((acc, tx) => {
+      if (normalizePaymentMethod(tx.paymentMethod) === 'UPI') {
+        return tx.type === 'income' ? acc + tx.amount : acc - tx.amount;
+      }
+      return acc;
+    }, 0);
+  }, [filteredTransactions]);
+
+  const filteredCashBalance = useMemo(() => {
+    return filteredTransactions.reduce((acc, tx) => {
+      if (normalizePaymentMethod(tx.paymentMethod) === 'Cash') {
+        return tx.type === 'income' ? acc + tx.amount : acc - tx.amount;
+      }
+      return acc;
+    }, 0);
+  }, [filteredTransactions]);
+
   const topSpendingCategory = useMemo(() => {
     const expensesByCategory: Record<string, number> = {};
     filteredTransactions
@@ -346,6 +395,7 @@ export const ExpenseProvider: React.FC<{ children: React.ReactNode }> = ({ child
   const addTransaction = (data: Omit<Transaction, 'id' | 'createdAt'>) => {
     const newTx: Transaction = {
       ...data,
+      paymentMethod: normalizePaymentMethod(data.paymentMethod),
       id: `tx_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
       createdAt: new Date().toISOString(),
     };
@@ -353,7 +403,11 @@ export const ExpenseProvider: React.FC<{ children: React.ReactNode }> = ({ child
   };
 
   const updateTransaction = (id: string, data: Partial<Transaction>) => {
-    setTransactions(prev => prev.map(tx => (tx.id === id ? { ...tx, ...data } : tx)));
+    setTransactions(prev => prev.map(tx => (tx.id === id ? { 
+      ...tx, 
+      ...data,
+      paymentMethod: data.paymentMethod ? normalizePaymentMethod(data.paymentMethod) : tx.paymentMethod
+    } : tx)));
   };
 
   const deleteTransaction = (id: string) => {
@@ -585,6 +639,10 @@ export const ExpenseProvider: React.FC<{ children: React.ReactNode }> = ({ child
         netSavings,
         savingsRate,
         topSpendingCategory,
+        upiBalance,
+        cashBalance,
+        filteredUpiBalance,
+        filteredCashBalance,
         addTransaction,
         updateTransaction,
         deleteTransaction,

@@ -1,9 +1,10 @@
 import React, { useState, useEffect } from 'react';
-import { X } from 'lucide-react';
+import { X, Smartphone, Banknote } from 'lucide-react';
 import { useExpense } from '../../context/ExpenseContext';
 import { PaymentMethod, RecurringTransaction, TransactionType } from '../../types';
 import { PAYMENT_METHODS } from '../../constants/defaults';
 import { format } from 'date-fns';
+import { normalizePaymentMethod } from '../../utils/formatters';
 
 interface RecurringModalProps {
   isOpen: boolean;
@@ -38,7 +39,7 @@ export const RecurringModal: React.FC<RecurringModalProps> = ({
       setAmount(recurringToEdit.amount.toString());
       setType(recurringToEdit.type);
       setCategoryId(recurringToEdit.categoryId);
-      setPaymentMethod(recurringToEdit.paymentMethod);
+      setPaymentMethod(normalizePaymentMethod(recurringToEdit.paymentMethod));
       setFrequency(recurringToEdit.frequency);
       setNextDueDate(recurringToEdit.nextDueDate);
       setNotes(recurringToEdit.notes || '');
@@ -46,7 +47,7 @@ export const RecurringModal: React.FC<RecurringModalProps> = ({
       setTitle('');
       setAmount('');
       setType('expense');
-      setPaymentMethod(paymentMethods[0]?.id || 'upi');
+      setPaymentMethod('UPI');
       setFrequency('monthly');
       setNextDueDate(format(new Date(), 'yyyy-MM-dd'));
       setNotes('');
@@ -243,19 +244,35 @@ export const RecurringModal: React.FC<RecurringModalProps> = ({
 
           <div>
             <label className="block text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400 mb-1.5">
-              Payment Method
+              Payment Method / Wallet *
             </label>
-            <select
-              value={paymentMethod}
-              onChange={(e) => setPaymentMethod(e.target.value as PaymentMethod)}
-              className="w-full px-3.5 py-2.5 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-slate-800 dark:text-white text-sm outline-none font-medium"
-            >
-              {paymentMethods.map((pm) => (
-                <option key={pm.id} value={pm.id}>
-                  {pm.label}
-                </option>
-              ))}
-            </select>
+            <div className="grid grid-cols-2 gap-2 p-1 bg-slate-100/90 dark:bg-slate-800/90 rounded-2xl border border-slate-200/70 dark:border-slate-700/70">
+              <button
+                type="button"
+                onClick={() => setPaymentMethod('UPI')}
+                className={`py-2 px-3 text-xs sm:text-sm font-bold rounded-xl flex items-center justify-center gap-2 transition-all ${
+                  paymentMethod === 'UPI'
+                    ? 'bg-white dark:bg-slate-900 text-indigo-600 dark:text-indigo-400 shadow-xs border border-slate-200/60 dark:border-slate-700/60 ring-2 ring-indigo-500/10'
+                    : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
+                }`}
+              >
+                <Smartphone size={15} className={paymentMethod === 'UPI' ? 'text-indigo-600 dark:text-indigo-400' : 'text-slate-400'} />
+                <span>UPI / Online</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setPaymentMethod('Cash')}
+                className={`py-2 px-3 text-xs sm:text-sm font-bold rounded-xl flex items-center justify-center gap-2 transition-all ${
+                  paymentMethod === 'Cash'
+                    ? 'bg-white dark:bg-slate-900 text-emerald-600 dark:text-emerald-400 shadow-xs border border-slate-200/60 dark:border-slate-700/60 ring-2 ring-emerald-500/10'
+                    : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
+                }`}
+              >
+                <Banknote size={15} className={paymentMethod === 'Cash' ? 'text-emerald-600 dark:text-emerald-400' : 'text-slate-400'} />
+                <span>Liquid Cash</span>
+              </button>
+            </div>
           </div>
 
           <div>

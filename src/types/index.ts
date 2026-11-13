@@ -7,7 +7,7 @@ export interface PaymentMethodItem {
   isDefault?: boolean;
 }
 
-export type PaymentMethod = string;
+export type PaymentMethod = 'UPI' | 'Cash' | string;
 
 export interface Category {
   id: string;
