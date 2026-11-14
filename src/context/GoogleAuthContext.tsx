@@ -44,12 +44,12 @@ interface GoogleAuthContextType {
 const GoogleAuthContext = createContext<GoogleAuthContextType | undefined>(undefined);
 
 export const GoogleAuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const envClientId = (import.meta as any).env?.VITE_GOOGLE_CLIENT_ID || '';
+  const envClientId = String((import.meta as any).env?.VITE_GOOGLE_CLIENT_ID || '').trim().replace(/^["']|["']$/g, '');
   const [customClientId, setCustomClientIdState] = useState<string>(() => {
-    return localStorage.getItem(AUTH_STORAGE_KEYS.CUSTOM_CLIENT_ID) || '';
+    return String(localStorage.getItem(AUTH_STORAGE_KEYS.CUSTOM_CLIENT_ID) || '').trim().replace(/^["']|["']$/g, '');
   });
 
-  const effectiveClientId = customClientId.trim() || envClientId.trim();
+  const effectiveClientId = customClientId || envClientId;
   const isConfigured = Boolean(effectiveClientId);
 
   const [user, setUser] = useState<GoogleUser | null>(() => {
