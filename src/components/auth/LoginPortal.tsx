@@ -1,36 +1,15 @@
-import React, { useState } from 'react';
+import React from 'react';
 import { 
   Wallet, 
   ShieldCheck, 
   FileSpreadsheet, 
   WifiOff, 
-  ArrowRight, 
-  Settings, 
-  Check, 
-  Sparkles,
-  ExternalLink
+  ArrowRight
 } from 'lucide-react';
 import { useGoogleAuth } from '../../context/GoogleAuthContext';
 
 export const LoginPortal: React.FC = () => {
-  const { 
-    loginWithGoogle, 
-    continueOffline, 
-    effectiveClientId, 
-    setCustomClientId,
-    isConfigured 
-  } = useGoogleAuth();
-
-  const [showConfig, setShowConfig] = useState(false);
-  const [clientIdInput, setClientIdInput] = useState(effectiveClientId || '');
-  const [savedSuccess, setSavedSuccess] = useState(false);
-
-  const handleSaveClientId = (e: React.FormEvent) => {
-    e.preventDefault();
-    setCustomClientId(clientIdInput.trim());
-    setSavedSuccess(true);
-    setTimeout(() => setSavedSuccess(false), 2500);
-  };
+  const { loginWithGoogle, continueOffline } = useGoogleAuth();
 
   return (
     <div className="min-h-screen bg-[#f8fafc] dark:bg-[#0b0f19] text-slate-800 dark:text-slate-100 flex flex-col justify-between p-4 sm:p-6 lg:p-8 font-['Plus_Jakarta_Sans',sans-serif] relative overflow-hidden transition-colors">
@@ -54,15 +33,6 @@ export const LoginPortal: React.FC = () => {
             </div>
           </div>
         </div>
-
-        <button
-          onClick={() => setShowConfig(!showConfig)}
-          className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-slate-500 hover:text-slate-800 dark:text-slate-400 dark:hover:text-white rounded-xl hover:bg-slate-200/50 dark:hover:bg-slate-800/60 transition"
-          title="Configure Google OAuth Credentials"
-        >
-          <Settings size={14} />
-          <span className="hidden sm:inline">OAuth Settings</span>
-        </button>
       </div>
 
       {/* Main Login Card */}
@@ -118,7 +88,7 @@ export const LoginPortal: React.FC = () => {
           <div className="space-y-3">
             <button
               onClick={loginWithGoogle}
-              className="w-full flex items-center justify-center gap-3 px-5 py-3.5 bg-white hover:bg-slate-50 dark:bg-slate-800 dark:hover:bg-slate-700/80 text-slate-800 dark:text-white font-bold text-sm rounded-2xl border border-slate-200 dark:border-slate-700 shadow-sm hover:shadow-md transition-all active:scale-98 group"
+              className="w-full flex items-center justify-center gap-3 px-5 py-3.5 bg-white hover:bg-slate-50 dark:bg-slate-800 dark:hover:bg-slate-700/80 text-slate-800 dark:text-white font-bold text-sm rounded-2xl border border-slate-200 dark:border-slate-700 shadow-sm hover:shadow-md transition-all active:scale-98 group cursor-pointer"
             >
               {/* Google G Logo */}
               <svg className="w-5 h-5 flex-shrink-0" viewBox="0 0 24 24">
@@ -146,54 +116,11 @@ export const LoginPortal: React.FC = () => {
             {/* Secondary Action: Continue Offline */}
             <button
               onClick={continueOffline}
-              className="w-full py-2.5 px-4 text-xs font-semibold text-slate-500 hover:text-slate-800 dark:text-slate-400 dark:hover:text-slate-200 rounded-xl hover:bg-slate-100 dark:hover:bg-slate-800/60 transition"
+              className="w-full py-2.5 px-4 text-xs font-semibold text-slate-500 hover:text-slate-800 dark:text-slate-400 dark:hover:text-slate-200 rounded-xl hover:bg-slate-100 dark:hover:bg-slate-800/60 transition cursor-pointer"
             >
               Continue Offline (Local Storage Only)
             </button>
           </div>
-
-          {/* Quick Setup Modal / Drawer if user opens config */}
-          {showConfig && (
-            <div className="mt-5 p-4 rounded-2xl bg-indigo-50/70 dark:bg-indigo-950/40 border border-indigo-100 dark:border-indigo-900/60 text-left animate-fade-in">
-              <div className="flex items-center justify-between mb-2">
-                <span className="text-xs font-bold text-indigo-950 dark:text-indigo-200">Google OAuth Client ID</span>
-                <a
-                  href="https://console.cloud.google.com/apis/credentials"
-                  target="_blank"
-                  rel="noreferrer"
-                  className="text-[10px] text-indigo-600 dark:text-indigo-400 hover:underline flex items-center gap-1 font-semibold"
-                >
-                  <span>Google Cloud Console</span>
-                  <ExternalLink size={10} />
-                </a>
-              </div>
-              <p className="text-[11px] text-slate-500 dark:text-slate-400 mb-3">
-                Provide your Google OAuth 2.0 Web Client ID, or set <code className="font-mono bg-white dark:bg-slate-900 px-1 py-0.5 rounded">VITE_GOOGLE_CLIENT_ID</code> in <code className="font-mono bg-white dark:bg-slate-900 px-1 py-0.5 rounded">.env</code>.
-              </p>
-              <form onSubmit={handleSaveClientId} className="space-y-2">
-                <input
-                  type="text"
-                  placeholder="e.g. 123456789-abcdef.apps.googleusercontent.com"
-                  value={clientIdInput}
-                  onChange={(e) => setClientIdInput(e.target.value)}
-                  className="w-full px-3 py-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl text-xs font-mono text-slate-800 dark:text-slate-100 outline-none focus:border-indigo-500"
-                />
-                <button
-                  type="submit"
-                  className="w-full py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-bold transition flex items-center justify-center gap-1.5"
-                >
-                  {savedSuccess ? (
-                    <>
-                      <Check size={14} />
-                      <span>Saved!</span>
-                    </>
-                  ) : (
-                    <span>Save Client ID</span>
-                  )}
-                </button>
-              </form>
-            </div>
-          )}
         </div>
       </div>
 
