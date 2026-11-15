@@ -68,7 +68,7 @@ export async function findOrCreateTrackWiseSheet(
     };
   }
 
-  // Step 2: Create new spreadsheet with Transactions, Budgets, and Accounts tabs
+  // Step 2: Create new spreadsheet with Transactions, UPI Expenses, Cash Expenses, Budgets, and Accounts tabs
   const createRes = await fetch('https://sheets.googleapis.com/v4/spreadsheets', {
     method: 'POST',
     headers: {
@@ -81,6 +81,8 @@ export async function findOrCreateTrackWiseSheet(
       },
       sheets: [
         { properties: { title: 'Transactions' } },
+        { properties: { title: 'UPI Expenses' } },
+        { properties: { title: 'Cash Expenses' } },
         { properties: { title: 'Budgets' } },
         { properties: { title: 'Accounts' } },
       ],
@@ -96,7 +98,7 @@ export async function findOrCreateTrackWiseSheet(
   const spreadsheetId = newSheet.spreadsheetId;
   const spreadsheetUrl = newSheet.spreadsheetUrl || `https://docs.google.com/spreadsheets/d/${spreadsheetId}/edit`;
 
-  // Step 3: Populate header rows
+  // Step 3: Populate header rows for all 5 sheets
   const headersPayload = {
     valueInputOption: 'USER_ENTERED',
     data: [
@@ -115,6 +117,36 @@ export async function findOrCreateTrackWiseSheet(
             'Tags',
             'Updated At',
             'Is Deleted',
+          ],
+        ],
+      },
+      {
+        range: "'UPI Expenses'!A1:H1",
+        values: [
+          [
+            'ID',
+            'Date',
+            'Title',
+            'Category ID',
+            'Amount',
+            'Notes',
+            'Tags',
+            'Updated At',
+          ],
+        ],
+      },
+      {
+        range: "'Cash Expenses'!A1:H1",
+        values: [
+          [
+            'ID',
+            'Date',
+            'Title',
+            'Category ID',
+            'Amount',
+            'Notes',
+            'Tags',
+            'Updated At',
           ],
         ],
       },
@@ -222,7 +254,103 @@ export async function pullDataFromSheet(
 }
 
 /**
- * Push full current state (including soft deletes and live account balances) to Google Sheet
+ * Ensure all 5 required sheets exist in the spreadsheet (auto-upgrades older 3-sheet spreadsheets)
+ */
+async function ensureSheetsExist(accessToken: string, spreadsheetId: string): Promise<void> {
+  try {
+    const metaRes = await fetch(
+      `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}?fields=sheets.properties.title`,
+      {
+        headers: {
+          Authorization: `Bearer ${accessToken}`,
+        },
+      }
+    );
+
+    if (!metaRes.ok) return;
+
+    const metaData = await metaRes.json();
+    const existingTitles = new Set<string>(
+      (metaData.sheets || []).map((s: any) => s.properties?.title)
+    );
+
+    const requiredSheets = ['Transactions', 'UPI Expenses', 'Cash Expenses', 'Budgets', 'Accounts'];
+    const missingSheets = requiredSheets.filter((title) => !existingTitles.has(title));
+
+    if (missingSheets.length > 0) {
+      const requests = missingSheets.map((title) => ({
+        addSheet: {
+          properties: {
+            title,
+          },
+        },
+      }));
+
+      await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}:batchUpdate`, {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${accessToken}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ requests }),
+      });
+
+      // Populate headers for any newly added sheets
+      const newHeadersData: { range: string; values: any[][] }[] = [];
+      if (missingSheets.includes('UPI Expenses')) {
+        newHeadersData.push({
+          range: "'UPI Expenses'!A1:H1",
+          values: [['ID', 'Date', 'Title', 'Category ID', 'Amount', 'Notes', 'Tags', 'Updated At']],
+        });
+      }
+      if (missingSheets.includes('Cash Expenses')) {
+        newHeadersData.push({
+          range: "'Cash Expenses'!A1:H1",
+          values: [['ID', 'Date', 'Title', 'Category ID', 'Amount', 'Notes', 'Tags', 'Updated At']],
+        });
+      }
+      if (missingSheets.includes('Transactions')) {
+        newHeadersData.push({
+          range: 'Transactions!A1:K1',
+          values: [
+            ['ID', 'Date', 'Title', 'Type', 'Category ID', 'Amount', 'Payment Method', 'Notes', 'Tags', 'Updated At', 'Is Deleted'],
+          ],
+        });
+      }
+      if (missingSheets.includes('Budgets')) {
+        newHeadersData.push({
+          range: 'Budgets!A1:F1',
+          values: [['ID', 'Category ID', 'Monthly Limit', 'Alert Threshold', 'Updated At', 'Is Deleted']],
+        });
+      }
+      if (missingSheets.includes('Accounts')) {
+        newHeadersData.push({
+          range: 'Accounts!A1:D1',
+          values: [['Wallet / Account', 'Live Balance', 'Currency', 'Last Synced (UTC)']],
+        });
+      }
+
+      if (newHeadersData.length > 0) {
+        await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values:batchUpdate`, {
+          method: 'POST',
+          headers: {
+            Authorization: `Bearer ${accessToken}`,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            valueInputOption: 'USER_ENTERED',
+            data: newHeadersData,
+          }),
+        });
+      }
+    }
+  } catch (err) {
+    console.warn('Could not verify/add missing sheets in Google Sheets:', err);
+  }
+}
+
+/**
+ * Push full current state (including soft deletes, 5-sheet structure with UPI/Cash expense totals) to Google Sheet
  */
 export async function pushDataToSheet(
   accessToken: string,
@@ -233,6 +361,9 @@ export async function pushDataToSheet(
   cashBalance: number,
   currencySymbol: string = '₹'
 ): Promise<void> {
+  // Ensure all 5 sheets exist (Transactions, UPI Expenses, Cash Expenses, Budgets, Accounts)
+  await ensureSheetsExist(accessToken, spreadsheetId);
+
   // Clear existing data rows below headers to avoid stale rows
   await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values:batchClear`, {
     method: 'POST',
@@ -241,11 +372,17 @@ export async function pushDataToSheet(
       'Content-Type': 'application/json',
     },
     body: JSON.stringify({
-      ranges: ['Transactions!A2:K', 'Budgets!A2:F', 'Accounts!A2:D'],
+      ranges: [
+        'Transactions!A2:K',
+        "'UPI Expenses'!A2:H",
+        "'Cash Expenses'!A2:H",
+        'Budgets!A2:F',
+        'Accounts!A2:D',
+      ],
     }),
   });
 
-  // Prepare Transactions rows
+  // 1. Prepare Transactions rows (all transactions ledger)
   const txRows = transactions.map((t) => [
     t.id,
     t.date,
@@ -260,7 +397,49 @@ export async function pushDataToSheet(
     t.isDeleted ? 'TRUE' : 'FALSE',
   ]);
 
-  // Prepare Budgets rows
+  // 2. Prepare UPI Expenses rows & Total
+  const upiExpenses = transactions.filter(
+    (t) => !t.isDeleted && t.type === 'expense' && normalizePaymentMethod(t.paymentMethod) === 'UPI'
+  );
+  let totalUpiExpenses = 0;
+  const upiRows: any[][] = upiExpenses.map((t) => {
+    totalUpiExpenses += t.amount;
+    return [
+      t.id,
+      t.date,
+      t.title,
+      t.categoryId,
+      t.amount,
+      t.notes || '',
+      (t.tags || []).join(';'),
+      t.updatedAt || t.createdAt || new Date().toISOString(),
+    ];
+  });
+  // Add Total UPI Expenses summary row at the bottom
+  upiRows.push(['', '', 'TOTAL UPI EXPENSES', '', totalUpiExpenses, '', '', '']);
+
+  // 3. Prepare Cash Expenses rows & Total
+  const cashExpenses = transactions.filter(
+    (t) => !t.isDeleted && t.type === 'expense' && normalizePaymentMethod(t.paymentMethod) === 'Cash'
+  );
+  let totalCashExpenses = 0;
+  const cashRows: any[][] = cashExpenses.map((t) => {
+    totalCashExpenses += t.amount;
+    return [
+      t.id,
+      t.date,
+      t.title,
+      t.categoryId,
+      t.amount,
+      t.notes || '',
+      (t.tags || []).join(';'),
+      t.updatedAt || t.createdAt || new Date().toISOString(),
+    ];
+  });
+  // Add Total Cash Expenses summary row at the bottom
+  cashRows.push(['', '', 'TOTAL CASH EXPENSES', '', totalCashExpenses, '', '', '']);
+
+  // 4. Prepare Budgets rows
   const budgetRows = budgets.map((b) => [
     b.id,
     b.categoryId,
@@ -270,11 +449,13 @@ export async function pushDataToSheet(
     b.isDeleted ? 'TRUE' : 'FALSE',
   ]);
 
-  // Prepare Accounts rows
+  // 5. Prepare Accounts rows (Wallet balances and total net balance)
   const nowIso = new Date().toISOString();
+  const totalNetBalance = upiBalance + cashBalance;
   const accountRows = [
     ['UPI / Online Wallet', upiBalance, currencySymbol, nowIso],
     ['Liquid Cash Wallet', cashBalance, currencySymbol, nowIso],
+    ['Total Net Balance', totalNetBalance, currencySymbol, nowIso],
   ];
 
   const updatePayload = {
@@ -283,6 +464,14 @@ export async function pushDataToSheet(
       {
         range: 'Transactions!A2:K',
         values: txRows,
+      },
+      {
+        range: "'UPI Expenses'!A2:H",
+        values: upiRows,
+      },
+      {
+        range: "'Cash Expenses'!A2:H",
+        values: cashRows,
       },
       {
         range: 'Budgets!A2:F',

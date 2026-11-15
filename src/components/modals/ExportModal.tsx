@@ -35,7 +35,11 @@ export const ExportModal: React.FC<ExportModalProps> = ({ isOpen, onClose }) => 
     categories, 
     paymentMethods, 
     settings, 
-    filters 
+    filters,
+    budgets,
+    upiBalance,
+    cashBalance,
+    netSavings
   } = useExpense();
 
   const [selectedPeriod, setSelectedPeriod] = useState<DateRangePreset>('this_month');
@@ -164,6 +168,10 @@ export const ExportModal: React.FC<ExportModalProps> = ({ isOpen, onClose }) => 
           periodName: periodLabel,
           dateRangeDescription,
           currencySymbol: settings.currency.symbol,
+          budgets,
+          upiBalance,
+          cashBalance,
+          totalBalance: netSavings,
         }
       );
 
@@ -207,8 +215,8 @@ export const ExportModal: React.FC<ExportModalProps> = ({ isOpen, onClose }) => 
               <FileSpreadsheet size={18} className="sm:w-5 sm:h-5" />
             </div>
             <div>
-              <h2 className="text-base sm:text-lg font-bold text-slate-800 dark:text-white">Export Transactions (CSV)</h2>
-              <p className="text-[11px] sm:text-xs text-slate-400 dark:text-slate-500">Select the time period you want to export</p>
+              <h2 className="text-base sm:text-lg font-bold text-slate-800 dark:text-white">Export Financial Data (CSV)</h2>
+              <p className="text-[11px] sm:text-xs text-slate-400 dark:text-slate-500">5-sheet structure matching Google Sheets (Ledger, UPI & Cash Expenses with Totals, Budgets, Accounts)</p>
             </div>
           </div>
           <button
