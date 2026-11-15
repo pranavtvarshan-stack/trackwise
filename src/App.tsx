@@ -70,11 +70,7 @@ const MainApp: React.FC = () => {
         budgets,
         upiBalance,
         cashBalance,
-        settings.currency.symbol,
-        (pulled) => {
-          if (pulled.transactions.length > 0) setAllTransactions(pulled.transactions);
-          if (pulled.budgets.length > 0) setAllBudgets(pulled.budgets);
-        }
+        settings.currency.symbol
       );
     }, 1500);
 

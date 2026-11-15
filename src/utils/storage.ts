@@ -28,21 +28,26 @@ const STORAGE_KEYS = {
 };
 
 export const getStoredTransactions = (): Transaction[] => {
+  const isInitialized = localStorage.getItem(STORAGE_KEYS.INITIALIZED);
   const data = localStorage.getItem(STORAGE_KEYS.TRANSACTIONS);
-  if (!data) {
+  if (!data && !isInitialized) {
     const sample = generateSampleTransactions().map(tx => ({
       ...tx,
       paymentMethod: normalizePaymentMethod(tx.paymentMethod)
     }));
+    localStorage.setItem(STORAGE_KEYS.INITIALIZED, 'true');
     localStorage.setItem(STORAGE_KEYS.TRANSACTIONS, JSON.stringify(sample));
     return sample;
   }
+  if (!data) {
+    return [];
+  }
   try {
     const parsed: Transaction[] = JSON.parse(data);
-    return parsed.map(tx => ({
+    return Array.isArray(parsed) ? parsed.map(tx => ({
       ...tx,
       paymentMethod: normalizePaymentMethod(tx.paymentMethod)
-    }));
+    })) : [];
   } catch (e) {
     console.error('Failed to parse transactions', e);
     return [];
@@ -88,15 +93,19 @@ export const savePaymentMethods = (paymentMethods: PaymentMethodItem[]): void =>
 };
 
 export const getStoredBudgets = (): Budget[] => {
+  const isInitialized = localStorage.getItem(STORAGE_KEYS.INITIALIZED);
   const data = localStorage.getItem(STORAGE_KEYS.BUDGETS);
-  if (!data) {
+  if (!data && !isInitialized) {
     localStorage.setItem(STORAGE_KEYS.BUDGETS, JSON.stringify(INITIAL_BUDGETS));
     return INITIAL_BUDGETS;
+  }
+  if (!data) {
+    return [];
   }
   try {
     return JSON.parse(data);
   } catch {
-    return INITIAL_BUDGETS;
+    return [];
   }
 };
 
@@ -105,8 +114,9 @@ export const saveBudgets = (budgets: Budget[]): void => {
 };
 
 export const getStoredRecurring = (): RecurringTransaction[] => {
+  const isInitialized = localStorage.getItem(STORAGE_KEYS.INITIALIZED);
   const data = localStorage.getItem(STORAGE_KEYS.RECURRING);
-  if (!data) {
+  if (!data && !isInitialized) {
     const sample = INITIAL_RECURRING.map(rec => ({
       ...rec,
       paymentMethod: normalizePaymentMethod(rec.paymentMethod)
@@ -114,14 +124,17 @@ export const getStoredRecurring = (): RecurringTransaction[] => {
     localStorage.setItem(STORAGE_KEYS.RECURRING, JSON.stringify(sample));
     return sample;
   }
+  if (!data) {
+    return [];
+  }
   try {
     const parsed: RecurringTransaction[] = JSON.parse(data);
-    return parsed.map(rec => ({
+    return Array.isArray(parsed) ? parsed.map(rec => ({
       ...rec,
       paymentMethod: normalizePaymentMethod(rec.paymentMethod)
-    }));
+    })) : [];
   } catch {
-    return INITIAL_RECURRING;
+    return [];
   }
 };
 
@@ -161,6 +174,7 @@ export const saveSettings = (settings: UserSettings): void => {
 
 export const resetAllDataToDefault = () => {
   const sample = generateSampleTransactions();
+  localStorage.setItem(STORAGE_KEYS.INITIALIZED, 'true');
   localStorage.setItem(STORAGE_KEYS.TRANSACTIONS, JSON.stringify(sample));
   localStorage.setItem(STORAGE_KEYS.CATEGORIES, JSON.stringify(DEFAULT_CATEGORIES));
   localStorage.setItem(STORAGE_KEYS.PAYMENT_METHODS, JSON.stringify(DEFAULT_PAYMENT_METHODS));
@@ -178,6 +192,7 @@ export const resetAllDataToDefault = () => {
 };
 
 export const clearAllData = () => {
+  localStorage.setItem(STORAGE_KEYS.INITIALIZED, 'true');
   localStorage.setItem(STORAGE_KEYS.TRANSACTIONS, JSON.stringify([]));
   localStorage.setItem(STORAGE_KEYS.BUDGETS, JSON.stringify([]));
   localStorage.setItem(STORAGE_KEYS.RECURRING, JSON.stringify([]));

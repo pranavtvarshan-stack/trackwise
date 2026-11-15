@@ -280,18 +280,6 @@ export const GoogleAuthProvider: React.FC<{ children: React.ReactNode }> = ({ ch
           localStorage.setItem(AUTH_STORAGE_KEYS.SHEET_URL, sheet.spreadsheetUrl);
         }
 
-        // Pull existing data if initial sync on a new device/browser
-        if (transactions.length === 0 && onPullData) {
-          try {
-            const remoteData = await pullDataFromSheet(accessToken, sheetId);
-            if (remoteData.transactions.length > 0 || remoteData.budgets.length > 0) {
-              onPullData(remoteData);
-            }
-          } catch (pullErr) {
-            console.warn('Initial pull failed, proceeding to push:', pullErr);
-          }
-        }
-
         // Push current data state to Google Sheet
         await pushDataToSheet(
           accessToken,
