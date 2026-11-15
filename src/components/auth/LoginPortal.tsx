@@ -1,27 +1,15 @@
-import React, { useState } from 'react';
+import React from 'react';
 import { 
   Wallet, 
   ShieldCheck, 
   FileSpreadsheet, 
   WifiOff, 
-  ArrowRight,
-  KeyRound,
-  Check
+  ArrowRight
 } from 'lucide-react';
 import { useGoogleAuth } from '../../context/GoogleAuthContext';
 
 export const LoginPortal: React.FC = () => {
-  const { loginWithGoogle, continueOffline, effectiveClientId, setCustomClientId } = useGoogleAuth();
-  const [inputVal, setInputVal] = useState('');
-  const [showConfigInput, setShowConfigInput] = useState(!effectiveClientId);
-
-  const handleSaveClientId = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (inputVal.trim()) {
-      setCustomClientId(inputVal.trim());
-      setShowConfigInput(false);
-    }
-  };
+  const { loginWithGoogle, continueOffline } = useGoogleAuth();
 
   return (
     <div className="min-h-screen bg-[#f8fafc] dark:bg-[#0b0f19] text-slate-800 dark:text-slate-100 flex flex-col justify-between p-4 sm:p-6 lg:p-8 font-['Plus_Jakarta_Sans',sans-serif] relative overflow-hidden transition-colors">
@@ -98,39 +86,6 @@ export const LoginPortal: React.FC = () => {
 
           {/* Primary Action: Google Sign In */}
           <div className="space-y-3">
-            {/* If Client ID is missing (e.g. Vercel deployment without build environment variables) */}
-            {(!effectiveClientId || showConfigInput) && (
-              <form
-                onSubmit={handleSaveClientId}
-                className="p-3.5 bg-amber-50/90 dark:bg-amber-950/40 border border-amber-200/90 dark:border-amber-800/60 rounded-2xl text-left space-y-2.5 animate-fade-in"
-              >
-                <div className="flex items-center gap-1.5 text-amber-900 dark:text-amber-300 font-bold text-xs">
-                  <KeyRound size={14} className="text-amber-600 dark:text-amber-400" />
-                  <span>Google Client ID Required</span>
-                </div>
-                <p className="text-[11px] text-amber-800/90 dark:text-amber-300/90 leading-relaxed">
-                  Enter your Google Cloud Client ID to connect Google Sheets on this device:
-                </p>
-                <div className="flex gap-1.5">
-                  <input
-                    type="text"
-                    value={inputVal}
-                    onChange={(e) => setInputVal(e.target.value)}
-                    placeholder="xxxx.apps.googleusercontent.com"
-                    className="flex-1 px-3 py-2 bg-white dark:bg-slate-900 border border-amber-300 dark:border-amber-700 rounded-xl text-xs font-mono text-slate-800 dark:text-slate-100 outline-none focus:ring-2 focus:ring-amber-500/30"
-                  />
-                  <button
-                    type="submit"
-                    disabled={!inputVal.trim()}
-                    className="px-3.5 py-2 bg-amber-600 hover:bg-amber-700 disabled:opacity-50 text-white rounded-xl text-xs font-bold transition flex items-center gap-1 cursor-pointer"
-                  >
-                    <Check size={13} />
-                    <span>Save</span>
-                  </button>
-                </div>
-              </form>
-            )}
-
             <button
               onClick={loginWithGoogle}
               className="w-full flex items-center justify-center gap-3 px-5 py-3.5 bg-white hover:bg-slate-50 dark:bg-slate-800 dark:hover:bg-slate-700/80 text-slate-800 dark:text-white font-bold text-sm rounded-2xl border border-slate-200 dark:border-slate-700 shadow-sm hover:shadow-md transition-all active:scale-98 group cursor-pointer"
@@ -157,16 +112,6 @@ export const LoginPortal: React.FC = () => {
               <span>Sign in with Google</span>
               <ArrowRight size={15} className="text-slate-400 group-hover:translate-x-1 transition-transform ml-auto" />
             </button>
-
-            {effectiveClientId && !showConfigInput && (
-              <button
-                type="button"
-                onClick={() => setShowConfigInput(true)}
-                className="text-[10px] text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 block mx-auto underline cursor-pointer"
-              >
-                Change Google Client ID
-              </button>
-            )}
 
             {/* Secondary Action: Continue Offline */}
             <button
