@@ -90,14 +90,13 @@ export const GoogleAuthProvider: React.FC<{ children: React.ReactNode }> = ({ ch
 
   const tokenClientRef = useRef<any>(null);
 
-  // Initialize or reconfigure Google Token Client
-  useEffect(() => {
+  const initGoogleTokenClient = useCallback(() => {
     if (typeof window === 'undefined' || !window.google?.accounts?.oauth2 || !effectiveClientId) {
-      return;
+      return null;
     }
 
     try {
-      tokenClientRef.current = window.google.accounts.oauth2.initTokenClient({
+      const client = window.google.accounts.oauth2.initTokenClient({
         client_id: effectiveClientId,
         scope: 'openid email profile https://www.googleapis.com/auth/drive.file https://www.googleapis.com/auth/spreadsheets',
         callback: async (tokenResponse: any) => {
@@ -128,7 +127,7 @@ export const GoogleAuthProvider: React.FC<{ children: React.ReactNode }> = ({ ch
               setUser(profile);
               localStorage.setItem(AUTH_STORAGE_KEYS.USER, JSON.stringify(profile));
 
-              // Initial Sheet discovery
+              // Initial Sheet discovery & preparation
               setSyncInfo((prev) => ({ ...prev, syncState: 'syncing' }));
               const sheet = await findOrCreateTrackWiseSheet(token);
               setSyncInfo((prev) => ({
@@ -150,10 +149,39 @@ export const GoogleAuthProvider: React.FC<{ children: React.ReactNode }> = ({ ch
           }
         },
       });
+      tokenClientRef.current = client;
+      return client;
     } catch (err) {
       console.warn('Failed to initialize Google Token Client:', err);
+      return null;
     }
   }, [effectiveClientId]);
+
+  // Keep checking until Google GSI script finishes loading
+  useEffect(() => {
+    if (!effectiveClientId) return;
+
+    if (window.google?.accounts?.oauth2) {
+      initGoogleTokenClient();
+      return;
+    }
+
+    const interval = setInterval(() => {
+      if (window.google?.accounts?.oauth2) {
+        initGoogleTokenClient();
+        clearInterval(interval);
+      }
+    }, 200);
+
+    const timeout = setTimeout(() => {
+      clearInterval(interval);
+    }, 10000);
+
+    return () => {
+      clearInterval(interval);
+      clearTimeout(timeout);
+    };
+  }, [effectiveClientId, initGoogleTokenClient]);
 
   const loginWithGoogle = useCallback(() => {
     if (!effectiveClientId) {
@@ -161,27 +189,30 @@ export const GoogleAuthProvider: React.FC<{ children: React.ReactNode }> = ({ ch
       return;
     }
 
-    if (tokenClientRef.current) {
-      tokenClientRef.current.requestAccessToken({ prompt: 'consent' });
-    } else if (window.google?.accounts?.oauth2) {
-      tokenClientRef.current = window.google.accounts.oauth2.initTokenClient({
-        client_id: effectiveClientId,
-        scope: 'openid email profile https://www.googleapis.com/auth/drive.file https://www.googleapis.com/auth/spreadsheets',
-        callback: () => {},
-      });
-      tokenClientRef.current.requestAccessToken({ prompt: 'consent' });
+    let client = tokenClientRef.current;
+    if (!client) {
+      client = initGoogleTokenClient();
+    }
+
+    if (client) {
+      client.requestAccessToken({ prompt: 'consent' });
     } else {
       alert('Google Sign-In is still loading. Please check your internet connection and try again.');
     }
-  }, [effectiveClientId]);
+  }, [effectiveClientId, initGoogleTokenClient]);
 
   const reconnectSync = useCallback(() => {
-    if (tokenClientRef.current) {
-      tokenClientRef.current.requestAccessToken({ prompt: '' });
+    let client = tokenClientRef.current;
+    if (!client) {
+      client = initGoogleTokenClient();
+    }
+
+    if (client) {
+      client.requestAccessToken({ prompt: '' });
     } else {
       loginWithGoogle();
     }
-  }, [loginWithGoogle]);
+  }, [initGoogleTokenClient, loginWithGoogle]);
 
   const logout = useCallback(() => {
     if (accessToken && window.google?.accounts?.oauth2?.revoke) {

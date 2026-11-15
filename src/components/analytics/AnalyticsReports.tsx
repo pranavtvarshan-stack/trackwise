@@ -174,6 +174,16 @@ export const AnalyticsReports: React.FC = () => {
                     </Pie>
                     <Tooltip
                       formatter={(val: number) => formatCurrency(val, settings.currency, settings.showDecimals)}
+                      itemStyle={{
+                        color: isDark ? '#ffffff' : '#0f172a',
+                        fontWeight: 700,
+                        fontSize: '12px',
+                      }}
+                      labelStyle={{
+                        color: isDark ? '#ffffff' : '#0f172a',
+                        fontWeight: 700,
+                        fontSize: '12px',
+                      }}
                       contentStyle={
                         isDark
                           ? {
@@ -182,7 +192,7 @@ export const AnalyticsReports: React.FC = () => {
                               backdropFilter: 'blur(16px)',
                               border: '1px solid rgba(51, 65, 85, 0.8)',
                               boxShadow: '0 12px 30px -4px rgba(0, 0, 0, 0.5)',
-                              color: '#f8fafc',
+                              color: '#ffffff',
                               fontWeight: 600,
                               fontSize: '12px',
                             }
@@ -236,6 +246,16 @@ export const AnalyticsReports: React.FC = () => {
                 <YAxis stroke={isDark ? '#64748b' : '#94a3b8'} fontSize={11} tickLine={false} />
                 <Tooltip
                   formatter={(val: number) => formatCurrency(val, settings.currency, settings.showDecimals)}
+                  itemStyle={{
+                    color: isDark ? '#ffffff' : '#0f172a',
+                    fontWeight: 700,
+                    fontSize: '12px',
+                  }}
+                  labelStyle={{
+                    color: isDark ? '#ffffff' : '#0f172a',
+                    fontWeight: 700,
+                    fontSize: '12px',
+                  }}
                   contentStyle={
                     isDark
                       ? {
@@ -244,7 +264,7 @@ export const AnalyticsReports: React.FC = () => {
                           backdropFilter: 'blur(16px)',
                           border: '1px solid rgba(51, 65, 85, 0.8)',
                           boxShadow: '0 12px 30px -4px rgba(0, 0, 0, 0.5)',
-                          color: '#f8fafc',
+                          color: '#ffffff',
                           fontWeight: 600,
                           fontSize: '12px',
                         }

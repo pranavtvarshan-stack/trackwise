@@ -256,10 +256,11 @@ export async function pullDataFromSheet(
 /**
  * Ensure all 5 required sheets exist in the spreadsheet (auto-upgrades older 3-sheet spreadsheets)
  */
-async function ensureSheetsExist(accessToken: string, spreadsheetId: string): Promise<void> {
+async function ensureSheetsExist(accessToken: string, spreadsheetId: string): Promise<Set<string>> {
+  const existingTitles = new Set<string>();
   try {
     const metaRes = await fetch(
-      `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}?fields=sheets.properties.title`,
+      `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}`,
       {
         headers: {
           Authorization: `Bearer ${accessToken}`,
@@ -267,12 +268,15 @@ async function ensureSheetsExist(accessToken: string, spreadsheetId: string): Pr
       }
     );
 
-    if (!metaRes.ok) return;
+    if (!metaRes.ok) {
+      console.warn('Failed to fetch spreadsheet metadata:', metaRes.status, metaRes.statusText);
+      return existingTitles;
+    }
 
     const metaData = await metaRes.json();
-    const existingTitles = new Set<string>(
-      (metaData.sheets || []).map((s: any) => s.properties?.title)
-    );
+    (metaData.sheets || []).forEach((s: any) => {
+      if (s.properties?.title) existingTitles.add(s.properties.title);
+    });
 
     const requiredSheets = ['Transactions', 'UPI Expenses', 'Cash Expenses', 'Budgets', 'Accounts'];
     const missingSheets = requiredSheets.filter((title) => !existingTitles.has(title));
@@ -286,7 +290,7 @@ async function ensureSheetsExist(accessToken: string, spreadsheetId: string): Pr
         },
       }));
 
-      await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}:batchUpdate`, {
+      const batchRes = await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}:batchUpdate`, {
         method: 'POST',
         headers: {
           Authorization: `Bearer ${accessToken}`,
@@ -295,21 +299,27 @@ async function ensureSheetsExist(accessToken: string, spreadsheetId: string): Pr
         body: JSON.stringify({ requests }),
       });
 
+      if (batchRes.ok) {
+        missingSheets.forEach((t) => existingTitles.add(t));
+      } else {
+        console.warn('Batch addSheet failed:', batchRes.status, await batchRes.text());
+      }
+
       // Populate headers for any newly added sheets
       const newHeadersData: { range: string; values: any[][] }[] = [];
-      if (missingSheets.includes('UPI Expenses')) {
+      if (missingSheets.includes('UPI Expenses') && existingTitles.has('UPI Expenses')) {
         newHeadersData.push({
           range: "'UPI Expenses'!A1:H1",
           values: [['ID', 'Date', 'Title', 'Category ID', 'Amount', 'Notes', 'Tags', 'Updated At']],
         });
       }
-      if (missingSheets.includes('Cash Expenses')) {
+      if (missingSheets.includes('Cash Expenses') && existingTitles.has('Cash Expenses')) {
         newHeadersData.push({
           range: "'Cash Expenses'!A1:H1",
           values: [['ID', 'Date', 'Title', 'Category ID', 'Amount', 'Notes', 'Tags', 'Updated At']],
         });
       }
-      if (missingSheets.includes('Transactions')) {
+      if (missingSheets.includes('Transactions') && existingTitles.has('Transactions')) {
         newHeadersData.push({
           range: 'Transactions!A1:K1',
           values: [
@@ -317,13 +327,13 @@ async function ensureSheetsExist(accessToken: string, spreadsheetId: string): Pr
           ],
         });
       }
-      if (missingSheets.includes('Budgets')) {
+      if (missingSheets.includes('Budgets') && existingTitles.has('Budgets')) {
         newHeadersData.push({
           range: 'Budgets!A1:F1',
           values: [['ID', 'Category ID', 'Monthly Limit', 'Alert Threshold', 'Updated At', 'Is Deleted']],
         });
       }
-      if (missingSheets.includes('Accounts')) {
+      if (missingSheets.includes('Accounts') && existingTitles.has('Accounts')) {
         newHeadersData.push({
           range: 'Accounts!A1:D1',
           values: [['Wallet / Account', 'Live Balance', 'Currency', 'Last Synced (UTC)']],
@@ -347,6 +357,7 @@ async function ensureSheetsExist(accessToken: string, spreadsheetId: string): Pr
   } catch (err) {
     console.warn('Could not verify/add missing sheets in Google Sheets:', err);
   }
+  return existingTitles;
 }
 
 /**
@@ -362,25 +373,28 @@ export async function pushDataToSheet(
   currencySymbol: string = '₹'
 ): Promise<void> {
   // Ensure all 5 sheets exist (Transactions, UPI Expenses, Cash Expenses, Budgets, Accounts)
-  await ensureSheetsExist(accessToken, spreadsheetId);
+  const existingSheets = await ensureSheetsExist(accessToken, spreadsheetId);
 
-  // Clear existing data rows below headers to avoid stale rows
-  await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values:batchClear`, {
-    method: 'POST',
-    headers: {
-      Authorization: `Bearer ${accessToken}`,
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({
-      ranges: [
-        'Transactions!A2:K',
-        "'UPI Expenses'!A2:H",
-        "'Cash Expenses'!A2:H",
-        'Budgets!A2:F',
-        'Accounts!A2:D',
-      ],
-    }),
-  });
+  // Clear existing data rows below headers only for existing sheets
+  const rangesToClear: string[] = [];
+  if (existingSheets.size === 0 || existingSheets.has('Transactions')) rangesToClear.push('Transactions!A2:K');
+  if (existingSheets.size === 0 || existingSheets.has('UPI Expenses')) rangesToClear.push("'UPI Expenses'!A2:H");
+  if (existingSheets.size === 0 || existingSheets.has('Cash Expenses')) rangesToClear.push("'Cash Expenses'!A2:H");
+  if (existingSheets.size === 0 || existingSheets.has('Budgets')) rangesToClear.push('Budgets!A2:F');
+  if (existingSheets.size === 0 || existingSheets.has('Accounts')) rangesToClear.push('Accounts!A2:D');
+
+  if (rangesToClear.length > 0) {
+    await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values:batchClear`, {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        ranges: rangesToClear,
+      }),
+    });
+  }
 
   // 1. Prepare Transactions rows (all transactions ledger)
   const txRows = transactions.map((t) => [
@@ -458,30 +472,26 @@ export async function pushDataToSheet(
     ['Total Net Balance', totalNetBalance, currencySymbol, nowIso],
   ];
 
+  const updateData: { range: string; values: any[][] }[] = [];
+  if (existingSheets.size === 0 || existingSheets.has('Transactions')) {
+    updateData.push({ range: 'Transactions!A2:K', values: txRows });
+  }
+  if (existingSheets.size === 0 || existingSheets.has('UPI Expenses')) {
+    updateData.push({ range: "'UPI Expenses'!A2:H", values: upiRows });
+  }
+  if (existingSheets.size === 0 || existingSheets.has('Cash Expenses')) {
+    updateData.push({ range: "'Cash Expenses'!A2:H", values: cashRows });
+  }
+  if (existingSheets.size === 0 || existingSheets.has('Budgets')) {
+    updateData.push({ range: 'Budgets!A2:F', values: budgetRows });
+  }
+  if (existingSheets.size === 0 || existingSheets.has('Accounts')) {
+    updateData.push({ range: 'Accounts!A2:D', values: accountRows });
+  }
+
   const updatePayload = {
     valueInputOption: 'USER_ENTERED',
-    data: [
-      {
-        range: 'Transactions!A2:K',
-        values: txRows,
-      },
-      {
-        range: "'UPI Expenses'!A2:H",
-        values: upiRows,
-      },
-      {
-        range: "'Cash Expenses'!A2:H",
-        values: cashRows,
-      },
-      {
-        range: 'Budgets!A2:F',
-        values: budgetRows,
-      },
-      {
-        range: 'Accounts!A2:D',
-        values: accountRows,
-      },
-    ],
+    data: updateData,
   };
 
   const res = await fetch(
@@ -498,6 +508,8 @@ export async function pushDataToSheet(
 
   if (!res.ok) {
     if (res.status === 401) throw new Error('TOKEN_EXPIRED');
+    const errText = await res.text();
+    console.error('Google Sheets sync error response:', res.status, errText);
     throw new Error(`Sync to sheet failed: ${res.statusText}`);
   }
 }
