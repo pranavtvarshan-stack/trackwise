@@ -36,9 +36,9 @@ interface GoogleAuthContextType {
     budgets: Budget[],
     upiBalance: number,
     cashBalance: number,
-    currencySymbol: string,
-    onPullData?: (pulled: { transactions: Transaction[]; budgets: Budget[] }) => void
+    currencySymbol: string
   ) => Promise<boolean>;
+  pullFromSheet: () => Promise<{ transactions: Transaction[]; budgets: Budget[] } | null>;
 }
 
 const GoogleAuthContext = createContext<GoogleAuthContextType | undefined>(undefined);
@@ -244,6 +244,56 @@ export const GoogleAuthProvider: React.FC<{ children: React.ReactNode }> = ({ ch
   }, []);
 
   /**
+   * Pull all transactions and budgets from Google Sheets
+   */
+  const pullFromSheet = useCallback(
+    async (): Promise<{ transactions: Transaction[]; budgets: Budget[] } | null> => {
+      if (!accessToken || !navigator.onLine) return null;
+      try {
+        let sheetId = syncInfo.spreadsheetId;
+        if (!sheetId) {
+          const sheet = await findOrCreateTrackWiseSheet(accessToken);
+          sheetId = sheet.spreadsheetId;
+          setSyncInfo((prev) => ({
+            ...prev,
+            spreadsheetId: sheet.spreadsheetId,
+            spreadsheetUrl: sheet.spreadsheetUrl,
+          }));
+          localStorage.setItem(AUTH_STORAGE_KEYS.SHEET_ID, sheet.spreadsheetId);
+          localStorage.setItem(AUTH_STORAGE_KEYS.SHEET_URL, sheet.spreadsheetUrl);
+        }
+        if (!sheetId) return null;
+
+        setSyncInfo((prev) => ({ ...prev, syncState: 'syncing' }));
+        const remoteData = await pullDataFromSheet(accessToken, sheetId);
+
+        const now = new Date().toISOString();
+        setSyncInfo((prev) => ({
+          ...prev,
+          syncState: 'synced',
+          lastSyncedAt: now,
+          pendingCount: 0,
+        }));
+        localStorage.setItem(AUTH_STORAGE_KEYS.LAST_SYNC, now);
+        return remoteData;
+      } catch (err: any) {
+        console.error('Failed to pull from Google Sheet:', err);
+        if (err.message === 'TOKEN_EXPIRED') {
+          setSyncInfo((prev) => ({ ...prev, syncState: 'token_expired' }));
+        } else {
+          setSyncInfo((prev) => ({
+            ...prev,
+            syncState: 'error',
+            errorMessage: err.message || 'Pull failed',
+          }));
+        }
+        return null;
+      }
+    },
+    [accessToken, syncInfo.spreadsheetId]
+  );
+
+  /**
    * Sync local engine with Google Sheet (Hybrid local-first push & pull)
    */
   const performSync = useCallback(
@@ -252,8 +302,7 @@ export const GoogleAuthProvider: React.FC<{ children: React.ReactNode }> = ({ ch
       budgets: Budget[],
       upiBalance: number,
       cashBalance: number,
-      currencySymbol: string,
-      onPullData?: (pulled: { transactions: Transaction[]; budgets: Budget[] }) => void
+      currencySymbol: string
     ): Promise<boolean> => {
       if (!accessToken || !user || !navigator.onLine) {
         return false;
@@ -333,6 +382,7 @@ export const GoogleAuthProvider: React.FC<{ children: React.ReactNode }> = ({ ch
         setCustomClientId,
         reconnectSync,
         performSync,
+        pullFromSheet,
       }}
     >
       {children}

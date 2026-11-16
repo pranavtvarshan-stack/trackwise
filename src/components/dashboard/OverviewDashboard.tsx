@@ -268,7 +268,7 @@ export const OverviewDashboard: React.FC<OverviewDashboardProps> = ({
               <div className="min-w-0">
                 <p className="text-[9px] font-extrabold uppercase tracking-wider text-indigo-700 dark:text-indigo-300 truncate">UPI</p>
                 <p className="text-[11px] sm:text-xs font-black text-slate-900 dark:text-white truncate">
-                  {formatCurrency(upiBalance, settings.currency, false)}
+                  {formatCurrency(upiBalance, settings.currency, settings.showDecimals)}
                 </p>
               </div>
             </div>
@@ -280,7 +280,7 @@ export const OverviewDashboard: React.FC<OverviewDashboardProps> = ({
               <div className="min-w-0">
                 <p className="text-[9px] font-extrabold uppercase tracking-wider text-emerald-700 dark:text-emerald-300 truncate">Cash</p>
                 <p className={`text-[11px] sm:text-xs font-black truncate ${cashBalance < 0 ? 'text-rose-600 dark:text-rose-400' : 'text-slate-900 dark:text-white'}`}>
-                  {formatCurrency(cashBalance, settings.currency, false)}
+                  {formatCurrency(cashBalance, settings.currency, settings.showDecimals)}
                 </p>
               </div>
             </div>

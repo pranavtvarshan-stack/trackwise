@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { ExpenseProvider, useExpense } from './context/ExpenseContext';
 import { GoogleAuthProvider, useGoogleAuth } from './context/GoogleAuthContext';
 import { LoginPortal } from './components/auth/LoginPortal';
@@ -17,7 +17,7 @@ import { Transaction } from './types';
 import { Plus, WifiOff, AlertTriangle } from 'lucide-react';
 
 const MainApp: React.FC = () => {
-  const { user, isOfflineMode, performSync, isTokenExpired, reconnectSync } = useGoogleAuth();
+  const { user, isOfflineMode, performSync, isTokenExpired, reconnectSync, pullFromSheet } = useGoogleAuth();
   const { 
     isExportModalOpen, 
     closeExportModal,
@@ -35,6 +35,8 @@ const MainApp: React.FC = () => {
   const [isCsvModalOpen, setIsCsvModalOpen] = useState(false);
   const [transactionToEdit, setTransactionToEdit] = useState<Transaction | null>(null);
   const [isOffline, setIsOffline] = useState(typeof navigator !== 'undefined' ? !navigator.onLine : false);
+  const [isInitialPullDone, setIsInitialPullDone] = useState(false);
+  const initialPullAttemptedRef = useRef<string | null>(null);
 
   useEffect(() => {
     const handleOnline = () => setIsOffline(false);
@@ -60,9 +62,38 @@ const MainApp: React.FC = () => {
     }
   }, []);
 
+  // Restore cloud expenses on login or when opening on a new domain/device
+  useEffect(() => {
+    if (!user || isTokenExpired || !navigator.onLine) return;
+    if (initialPullAttemptedRef.current === user.id) return;
+    initialPullAttemptedRef.current = user.id;
+
+    pullFromSheet().then((remoteData) => {
+      if (remoteData) {
+        if (remoteData.transactions.length > 0) {
+          if (transactions.length === 0) {
+            setAllTransactions(remoteData.transactions);
+          } else {
+            const localIds = new Set(transactions.map((t) => t.id));
+            const missingRemote = remoteData.transactions.filter((t) => !localIds.has(t.id));
+            if (missingRemote.length > 0) {
+              setAllTransactions([...transactions, ...missingRemote]);
+            }
+          }
+        }
+        if (remoteData.budgets.length > 0 && budgets.length === 0) {
+          setAllBudgets(remoteData.budgets);
+        }
+      }
+      setIsInitialPullDone(true);
+    });
+  }, [user, isTokenExpired, pullFromSheet]);
+
   // Auto-Sync Debounced Engine: When local state changes and user is logged in
   useEffect(() => {
     if (!user || isTokenExpired || !navigator.onLine) return;
+    // Prevent an empty local state on a new domain from pushing before cloud data is checked
+    if (!isInitialPullDone && transactions.length === 0) return;
 
     const timer = setTimeout(() => {
       performSync(
@@ -75,7 +106,7 @@ const MainApp: React.FC = () => {
     }, 1500);
 
     return () => clearTimeout(timer);
-  }, [transactions, budgets, user, isTokenExpired, upiBalance, cashBalance, settings.currency.symbol]);
+  }, [transactions, budgets, user, isTokenExpired, upiBalance, cashBalance, settings.currency.symbol, isInitialPullDone]);
 
   // Sync on Reconnecting Online
   useEffect(() => {

@@ -47,7 +47,8 @@ export const Header: React.FC<HeaderProps> = ({ onOpenAddModal, onNavigateToTab,
     isTokenExpired,
     loginWithGoogle,
     logout,
-    performSync
+    performSync,
+    pullFromSheet
   } = useGoogleAuth();
 
   const [showExportMenu, setShowExportMenu] = useState(false);
@@ -83,19 +84,43 @@ export const Header: React.FC<HeaderProps> = ({ onOpenAddModal, onNavigateToTab,
 
   const handleManualSync = async () => {
     setManualSyncing(true);
-    await performSync(
-      transactions,
-      budgets,
-      upiBalance,
-      cashBalance,
-      settings.currency.symbol,
-      (pulled) => {
-        if (pulled.transactions.length > 0) setAllTransactions(pulled.transactions);
-        if (pulled.budgets.length > 0) setAllBudgets(pulled.budgets);
+    try {
+      const remote = await pullFromSheet();
+      let currentTransactions = transactions;
+      let currentBudgets = budgets;
+      if (remote) {
+        if (remote.transactions.length > 0) {
+          if (transactions.length === 0) {
+            currentTransactions = remote.transactions;
+            setAllTransactions(remote.transactions);
+          } else {
+            const localIds = new Set(transactions.map((t) => t.id));
+            const missing = remote.transactions.filter((t) => !localIds.has(t.id));
+            if (missing.length > 0) {
+              currentTransactions = [...transactions, ...missing];
+              setAllTransactions(currentTransactions);
+            }
+          }
+        }
+        if (remote.budgets.length > 0 && budgets.length === 0) {
+          currentBudgets = remote.budgets;
+          setAllBudgets(remote.budgets);
+        }
       }
-    );
-    setManualSyncing(false);
-    setShowUserMenu(false);
+
+      await performSync(
+        currentTransactions,
+        currentBudgets,
+        upiBalance,
+        cashBalance,
+        settings.currency.symbol
+      );
+    } catch (err) {
+      console.error('Manual sync failed:', err);
+    } finally {
+      setManualSyncing(false);
+      setShowUserMenu(false);
+    }
   };
 
   return (
