@@ -1,4 +1,4 @@
-import React, { useMemo } from 'react';
+import React, { useMemo, useState, useRef, useEffect } from 'react';
 import { 
   ArrowUpRight, 
   ArrowDownRight, 
@@ -8,12 +8,16 @@ import {
   Calendar,
   AlertTriangle,
   ChevronRight,
+  ChevronDown,
+  X,
   Filter,
   Smartphone,
-  Banknote
+  Banknote,
+  ExternalLink,
+  Plus
 } from 'lucide-react';
 import { useExpense } from '../../context/ExpenseContext';
-import { formatCurrency, formatDateDisplay, formatPercentage } from '../../utils/formatters';
+import { formatCurrency, formatDateDisplay, formatPercentage, normalizePaymentMethod } from '../../utils/formatters';
 import { DateRangePreset } from '../../types';
 import { CategoryIcon } from '../common/CategoryIcon';
 import { 
@@ -189,6 +193,163 @@ export const OverviewDashboard: React.FC<OverviewDashboardProps> = ({
     };
   }, [transactions]);
 
+  // Expansion and Drill-down State
+  const [expandedCard, setExpandedCard] = useState<'savings' | 'income' | 'expense' | 'category' | null>(null);
+  const [walletTab, setWalletTab] = useState<'all' | 'upi' | 'cash'>('all');
+  const expandedPanelRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (expandedCard && expandedPanelRef.current) {
+      expandedPanelRef.current.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    }
+  }, [expandedCard]);
+
+  // Derived filtered transaction sets for expansions
+  const incomeTransactions = useMemo(() => {
+    return filteredTransactions.filter((tx) => tx.type === 'income');
+  }, [filteredTransactions]);
+
+  const expenseTransactions = useMemo(() => {
+    return filteredTransactions.filter((tx) => tx.type === 'expense');
+  }, [filteredTransactions]);
+
+  const topCategoryTransactions = useMemo(() => {
+    if (!topSpendingCategory.category) return [];
+    return filteredTransactions.filter(
+      (tx) => tx.type === 'expense' && tx.categoryId === topSpendingCategory.category?.id
+    );
+  }, [filteredTransactions, topSpendingCategory]);
+
+  const topCategoryPercentage = totalExpenses > 0
+    ? Math.round((topSpendingCategory.amount / totalExpenses) * 100)
+    : 0;
+
+  const topCategoryBudget = useMemo(() => {
+    if (!topSpendingCategory.category) return null;
+    return budgetStatusList.find((b) => b.categoryId === topSpendingCategory.category?.id);
+  }, [budgetStatusList, topSpendingCategory]);
+
+  // Wallet in-period split stats
+  const walletStats = useMemo(() => {
+    let periodUpiIncome = 0;
+    let periodUpiExpense = 0;
+    let periodCashIncome = 0;
+    let periodCashExpense = 0;
+
+    filteredTransactions.forEach((tx) => {
+      const isUpi = normalizePaymentMethod(tx.paymentMethod) === 'UPI';
+      if (tx.type === 'income') {
+        if (isUpi) periodUpiIncome += tx.amount;
+        else periodCashIncome += tx.amount;
+      } else {
+        if (isUpi) periodUpiExpense += tx.amount;
+        else periodCashExpense += tx.amount;
+      }
+    });
+
+    return {
+      periodUpiIncome,
+      periodUpiExpense,
+      periodUpiNet: periodUpiIncome - periodUpiExpense,
+      periodCashIncome,
+      periodCashExpense,
+      periodCashNet: periodCashIncome - periodCashExpense,
+    };
+  }, [filteredTransactions]);
+
+  const upiTransactions = useMemo(() => {
+    return filteredTransactions.filter((tx) => normalizePaymentMethod(tx.paymentMethod) === 'UPI');
+  }, [filteredTransactions]);
+
+  const cashTransactions = useMemo(() => {
+    return filteredTransactions.filter((tx) => normalizePaymentMethod(tx.paymentMethod) === 'Cash');
+  }, [filteredTransactions]);
+
+  const savingsTransactions = useMemo(() => {
+    if (walletTab === 'upi') return upiTransactions;
+    if (walletTab === 'cash') return cashTransactions;
+    return filteredTransactions;
+  }, [filteredTransactions, upiTransactions, cashTransactions, walletTab]);
+
+  const incomeByCategory = useMemo(() => {
+    const map: Record<string, { categoryName: string; amount: number; color: string }> = {};
+    incomeTransactions.forEach((tx) => {
+      const cat = categoryMap.get(tx.categoryId);
+      const catId = tx.categoryId || 'other';
+      if (!map[catId]) {
+        map[catId] = {
+          categoryName: cat?.name || 'Income',
+          amount: 0,
+          color: cat?.color || '#10b981',
+        };
+      }
+      map[catId].amount += tx.amount;
+    });
+    return Object.values(map);
+  }, [incomeTransactions, categoryMap]);
+
+  // Reusable transaction row renderer for expanded lists
+  const renderTransactionRow = (tx: (typeof filteredTransactions)[0]) => {
+    const cat = categoryMap.get(tx.categoryId);
+    const isExpense = tx.type === 'expense';
+    const isUpi = normalizePaymentMethod(tx.paymentMethod) === 'UPI';
+
+    return (
+      <div
+        key={tx.id}
+        onClick={() => onEditTransaction(tx)}
+        className="py-2.5 px-3 flex items-center justify-between gap-3 hover:bg-slate-100/80 dark:hover:bg-slate-800/60 rounded-xl cursor-pointer transition-colors duration-150 group border border-transparent hover:border-slate-200/80 dark:hover:border-slate-700/60"
+        title="Click to view/edit details"
+      >
+        <div className="flex items-center gap-2.5 sm:gap-3 min-w-0">
+          <div
+            className="w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0 shadow-2xs"
+            style={{
+              backgroundColor: `${cat?.color || '#94a3b8'}20`,
+              color: cat?.color || '#64748b',
+            }}
+          >
+            <CategoryIcon name={cat?.icon || 'Tag'} size={17} />
+          </div>
+          <div className="min-w-0">
+            <p className="text-xs sm:text-sm font-bold text-slate-800 dark:text-slate-100 truncate group-hover:text-indigo-600 dark:group-hover:text-indigo-400 transition-colors">
+              {tx.title}
+            </p>
+            <div className="flex items-center gap-1.5 text-[10px] sm:text-[11px] text-slate-400 dark:text-slate-500">
+              <span className="font-medium text-slate-600 dark:text-slate-400 truncate max-w-[90px] sm:max-w-none">
+                {cat?.name || 'Uncategorized'}
+              </span>
+              <span>•</span>
+              <span className="whitespace-nowrap">{formatDateDisplay(tx.date)}</span>
+            </div>
+          </div>
+        </div>
+        <div className="text-right flex-shrink-0 flex items-center gap-2">
+          <span
+            className={`inline-flex items-center gap-1 text-[9px] sm:text-[10px] font-extrabold uppercase px-1.5 sm:px-2 py-0.5 rounded-md border ${
+              isUpi
+                ? 'bg-indigo-50 dark:bg-indigo-950/60 text-indigo-700 dark:text-indigo-300 border-indigo-200/60 dark:border-indigo-800/50'
+                : 'bg-emerald-50 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300 border-emerald-200/60 dark:border-emerald-800/50'
+            }`}
+          >
+            {isUpi ? <Smartphone size={10} /> : <Banknote size={10} />}
+            <span>{isUpi ? 'UPI' : 'Cash'}</span>
+          </span>
+          <div className="text-right min-w-[65px] sm:min-w-[80px]">
+            <p
+              className={`text-xs sm:text-sm font-black tracking-tight ${
+                isExpense ? 'text-rose-600 dark:text-rose-400' : 'text-emerald-600 dark:text-emerald-400'
+              }`}
+            >
+              {isExpense ? '-' : '+'}
+              {formatCurrency(tx.amount, settings.currency, settings.showDecimals)}
+            </p>
+          </div>
+        </div>
+      </div>
+    );
+  };
+
   return (
     <div className="space-y-6">
       {/* Date Range Selector Bar */}
@@ -239,108 +400,653 @@ export const OverviewDashboard: React.FC<OverviewDashboardProps> = ({
         </div>
       )}
 
-      {/* Top Stat Cards */}
+      {/* Top Stat Cards - Expandable in both Mobile and Desktop */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
         {/* Net Savings / Balance */}
-        <div className="bg-white/90 dark:bg-slate-900/80 backdrop-blur-md p-4 sm:p-5 rounded-2xl border border-slate-200/70 dark:border-slate-800/80 shadow-[0_2px_16px_rgba(0,0,0,0.03)] hover:shadow-md transition-all duration-200 hover:-translate-y-0.5">
+        <div
+          onClick={() => {
+            setExpandedCard((prev) => (prev === 'savings' ? null : 'savings'));
+            setWalletTab('all');
+          }}
+          className={`bg-white/90 dark:bg-slate-900/80 backdrop-blur-md p-4 sm:p-5 rounded-2xl border transition-all duration-200 hover:-translate-y-0.5 cursor-pointer group ${
+            expandedCard === 'savings'
+              ? 'border-indigo-500 dark:border-indigo-500 ring-2 ring-indigo-500/30 shadow-md'
+              : 'border-slate-200/70 dark:border-slate-800/80 shadow-[0_2px_16px_rgba(0,0,0,0.03)] hover:border-slate-300 dark:hover:border-slate-700 hover:shadow-md'
+          }`}
+        >
           <div className="flex items-center justify-between text-slate-500 mb-2">
-            <span className="text-[10px] sm:text-xs font-bold uppercase tracking-wider text-slate-400 dark:text-slate-500 truncate">Net Savings</span>
-            <div className={`p-2 rounded-xl flex-shrink-0 shadow-2xs ${netSavings >= 0 ? 'bg-emerald-50 dark:bg-emerald-950/60 text-emerald-600 dark:text-emerald-400 border border-emerald-100 dark:border-emerald-800/60' : 'bg-rose-50 dark:bg-rose-950/60 text-rose-600 dark:text-rose-400 border border-rose-100 dark:border-rose-800/60'}`}>
-              <Wallet size={16} className="sm:w-[17px] sm:h-[17px]" />
+            <span className="text-[10px] sm:text-xs font-bold uppercase tracking-wider text-slate-400 dark:text-slate-500 truncate">
+              Net Savings
+            </span>
+            <div className="flex items-center gap-1.5">
+              <div
+                className={`p-2 rounded-xl flex-shrink-0 shadow-2xs ${
+                  netSavings >= 0
+                    ? 'bg-emerald-50 dark:bg-emerald-950/60 text-emerald-600 dark:text-emerald-400 border border-emerald-100 dark:border-emerald-800/60'
+                    : 'bg-rose-50 dark:bg-rose-950/60 text-rose-600 dark:text-rose-400 border border-rose-100 dark:border-rose-800/60'
+                }`}
+              >
+                <Wallet size={16} className="sm:w-[17px] sm:h-[17px]" />
+              </div>
+              <ChevronDown
+                size={14}
+                className={`transition-transform duration-200 ${
+                  expandedCard === 'savings'
+                    ? 'rotate-180 text-indigo-600 dark:text-indigo-400'
+                    : 'text-slate-400 group-hover:text-slate-600 dark:group-hover:text-slate-300'
+                }`}
+              />
             </div>
           </div>
-          <div className={`text-lg sm:text-2xl font-black tracking-tight truncate ${netSavings >= 0 ? 'text-slate-900 dark:text-white' : 'text-rose-600 dark:text-rose-400'}`}>
+          <div
+            className={`text-lg sm:text-2xl font-black tracking-tight truncate ${
+              netSavings >= 0 ? 'text-slate-900 dark:text-white' : 'text-rose-600 dark:text-rose-400'
+            }`}
+          >
             {formatCurrency(netSavings, settings.currency, settings.showDecimals)}
           </div>
-          <div className="mt-2 text-[11px] sm:text-xs flex items-center gap-1 font-medium text-slate-500 dark:text-slate-400 truncate">
-            <span>Savings Rate:</span>
-            <span className={`font-bold px-1.5 py-0.5 rounded-md ${savingsRate >= 20 ? 'bg-emerald-50 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300' : 'bg-amber-50 dark:bg-amber-950/60 text-amber-700 dark:text-amber-300'}`}>
-              {formatPercentage(savingsRate)}
-            </span>
+          <div className="mt-2 text-[11px] sm:text-xs flex items-center justify-between font-medium text-slate-500 dark:text-slate-400">
+            <div className="flex items-center gap-1 truncate">
+              <span>Savings Rate:</span>
+              <span
+                className={`font-bold px-1.5 py-0.5 rounded-md ${
+                  savingsRate >= 20
+                    ? 'bg-emerald-50 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300'
+                    : 'bg-amber-50 dark:bg-amber-950/60 text-amber-700 dark:text-amber-300'
+                }`}
+              >
+                {formatPercentage(savingsRate)}
+              </span>
+            </div>
           </div>
 
-          {/* Split Wallets (UPI vs Liquid Cash) */}
-          <div className="mt-3 pt-3 border-t border-slate-100 dark:border-slate-800/80 grid grid-cols-2 gap-1.5 sm:gap-2">
-            <div className="flex items-center gap-1.5 p-1.5 rounded-xl bg-indigo-50/70 dark:bg-indigo-950/50 border border-indigo-100/70 dark:border-indigo-900/40 min-w-0" title="Cumulative UPI / Online Balance">
-              <div className="w-5 h-5 rounded-lg bg-indigo-600 text-white flex items-center justify-center flex-shrink-0 shadow-2xs">
-                <Smartphone size={11} />
-              </div>
-              <div className="min-w-0">
-                <p className="text-[9px] font-extrabold uppercase tracking-wider text-indigo-700 dark:text-indigo-300 truncate">UPI</p>
-                <p className="text-[11px] sm:text-xs font-black text-slate-900 dark:text-white truncate">
-                  {formatCurrency(upiBalance, settings.currency, settings.showDecimals)}
+          {/* Split Wallets (UPI vs Liquid Cash) - Stacked vertically on mobile to prevent truncation */}
+          <div className="mt-3 pt-3 border-t border-slate-100 dark:border-slate-800/80 flex flex-col gap-1.5 sm:grid sm:grid-cols-2 sm:gap-2">
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                setExpandedCard('savings');
+                setWalletTab('upi');
+              }}
+              className={`w-full flex items-center justify-between p-1.5 sm:p-2 rounded-xl transition-all duration-150 active:scale-95 text-left ${
+                expandedCard === 'savings' && walletTab === 'upi'
+                  ? 'bg-indigo-100/90 dark:bg-indigo-900/60 border-2 border-indigo-500 shadow-xs'
+                  : 'bg-indigo-50/70 dark:bg-indigo-950/50 border border-indigo-100/70 dark:border-indigo-900/40 hover:bg-indigo-100/50 dark:hover:bg-indigo-900/40'
+              }`}
+              title="Click to view UPI breakdown"
+            >
+              <div className="flex items-center gap-1.5 min-w-0">
+                <div className="w-5 h-5 rounded-lg bg-indigo-600 text-white flex items-center justify-center flex-shrink-0 shadow-2xs">
+                  <Smartphone size={11} />
+                </div>
+                <p className="text-[9px] font-extrabold uppercase tracking-wider text-indigo-700 dark:text-indigo-300">
+                  UPI
                 </p>
               </div>
-            </div>
+              <p className="text-[11px] sm:text-xs font-black text-slate-900 dark:text-white pl-1 whitespace-nowrap">
+                {formatCurrency(upiBalance, settings.currency, settings.showDecimals)}
+              </p>
+            </button>
 
-            <div className="flex items-center gap-1.5 p-1.5 rounded-xl bg-emerald-50/70 dark:bg-emerald-950/50 border border-emerald-100/70 dark:border-emerald-900/40 min-w-0" title="Cumulative Liquid Cash in Hand">
-              <div className="w-5 h-5 rounded-lg bg-emerald-600 text-white flex items-center justify-center flex-shrink-0 shadow-2xs">
-                <Banknote size={11} />
-              </div>
-              <div className="min-w-0">
-                <p className="text-[9px] font-extrabold uppercase tracking-wider text-emerald-700 dark:text-emerald-300 truncate">Cash</p>
-                <p className={`text-[11px] sm:text-xs font-black truncate ${cashBalance < 0 ? 'text-rose-600 dark:text-rose-400' : 'text-slate-900 dark:text-white'}`}>
-                  {formatCurrency(cashBalance, settings.currency, settings.showDecimals)}
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                setExpandedCard('savings');
+                setWalletTab('cash');
+              }}
+              className={`w-full flex items-center justify-between p-1.5 sm:p-2 rounded-xl transition-all duration-150 active:scale-95 text-left ${
+                expandedCard === 'savings' && walletTab === 'cash'
+                  ? 'bg-emerald-100/90 dark:bg-emerald-900/60 border-2 border-emerald-500 shadow-xs'
+                  : 'bg-emerald-50/70 dark:bg-emerald-950/50 border border-emerald-100/70 dark:border-emerald-900/40 hover:bg-emerald-100/50 dark:hover:bg-emerald-900/40'
+              }`}
+              title="Click to view Cash breakdown"
+            >
+              <div className="flex items-center gap-1.5 min-w-0">
+                <div className="w-5 h-5 rounded-lg bg-emerald-600 text-white flex items-center justify-center flex-shrink-0 shadow-2xs">
+                  <Banknote size={11} />
+                </div>
+                <p className="text-[9px] font-extrabold uppercase tracking-wider text-emerald-700 dark:text-emerald-300">
+                  Cash
                 </p>
               </div>
-            </div>
+              <p
+                className={`text-[11px] sm:text-xs font-black pl-1 whitespace-nowrap ${
+                  cashBalance < 0 ? 'text-rose-600 dark:text-rose-400' : 'text-slate-900 dark:text-white'
+                }`}
+              >
+                {formatCurrency(cashBalance, settings.currency, settings.showDecimals)}
+              </p>
+            </button>
           </div>
         </div>
 
         {/* Total Income */}
-        <div className="bg-white/90 dark:bg-slate-900/80 backdrop-blur-md p-4 sm:p-5 rounded-2xl border border-slate-200/70 dark:border-slate-800/80 shadow-[0_2px_16px_rgba(0,0,0,0.03)] hover:shadow-md transition-all duration-200 hover:-translate-y-0.5">
+        <div
+          onClick={() => setExpandedCard((prev) => (prev === 'income' ? null : 'income'))}
+          className={`bg-white/90 dark:bg-slate-900/80 backdrop-blur-md p-4 sm:p-5 rounded-2xl border transition-all duration-200 hover:-translate-y-0.5 cursor-pointer group ${
+            expandedCard === 'income'
+              ? 'border-emerald-500 dark:border-emerald-500 ring-2 ring-emerald-500/30 shadow-md'
+              : 'border-slate-200/70 dark:border-slate-800/80 shadow-[0_2px_16px_rgba(0,0,0,0.03)] hover:border-slate-300 dark:hover:border-slate-700 hover:shadow-md'
+          }`}
+        >
           <div className="flex items-center justify-between text-slate-500 mb-2">
-            <span className="text-[10px] sm:text-xs font-bold uppercase tracking-wider text-slate-400 dark:text-slate-500 truncate">Total Income</span>
-            <div className="p-2 rounded-xl bg-emerald-50 dark:bg-emerald-950/60 text-emerald-600 dark:text-emerald-400 border border-emerald-100 dark:border-emerald-800/60 flex-shrink-0 shadow-2xs">
-              <ArrowUpRight size={16} className="sm:w-[17px] sm:h-[17px]" />
+            <span className="text-[10px] sm:text-xs font-bold uppercase tracking-wider text-slate-400 dark:text-slate-500 truncate">
+              Total Income
+            </span>
+            <div className="flex items-center gap-1.5">
+              <div className="p-2 rounded-xl bg-emerald-50 dark:bg-emerald-950/60 text-emerald-600 dark:text-emerald-400 border border-emerald-100 dark:border-emerald-800/60 flex-shrink-0 shadow-2xs">
+                <ArrowUpRight size={16} className="sm:w-[17px] sm:h-[17px]" />
+              </div>
+              <ChevronDown
+                size={14}
+                className={`transition-transform duration-200 ${
+                  expandedCard === 'income'
+                    ? 'rotate-180 text-emerald-600 dark:text-emerald-400'
+                    : 'text-slate-400 group-hover:text-slate-600 dark:group-hover:text-slate-300'
+                }`}
+              />
             </div>
           </div>
           <div className="text-lg sm:text-2xl font-black tracking-tight text-emerald-600 dark:text-emerald-400 truncate">
             {formatCurrency(totalIncome, settings.currency, settings.showDecimals)}
           </div>
-          <div className="mt-2 text-[11px] sm:text-xs text-slate-400 dark:text-slate-500 font-medium truncate">
-            {filteredTransactions.filter((t) => t.type === 'income').length} income source(s)
+          <div className="mt-2 text-[11px] sm:text-xs text-slate-500 dark:text-slate-400 font-medium flex items-center justify-between">
+            <span>{incomeTransactions.length} source(s)</span>
+            <span className="text-[10px] font-bold text-emerald-600 dark:text-emerald-400 group-hover:underline">
+              {expandedCard === 'income' ? 'Hide' : 'View all'}
+            </span>
           </div>
         </div>
 
         {/* Total Expenses */}
-        <div className="bg-white/90 dark:bg-slate-900/80 backdrop-blur-md p-4 sm:p-5 rounded-2xl border border-slate-200/70 dark:border-slate-800/80 shadow-[0_2px_16px_rgba(0,0,0,0.03)] hover:shadow-md transition-all duration-200 hover:-translate-y-0.5">
+        <div
+          onClick={() => setExpandedCard((prev) => (prev === 'expense' ? null : 'expense'))}
+          className={`bg-white/90 dark:bg-slate-900/80 backdrop-blur-md p-4 sm:p-5 rounded-2xl border transition-all duration-200 hover:-translate-y-0.5 cursor-pointer group ${
+            expandedCard === 'expense'
+              ? 'border-rose-500 dark:border-rose-500 ring-2 ring-rose-500/30 shadow-md'
+              : 'border-slate-200/70 dark:border-slate-800/80 shadow-[0_2px_16px_rgba(0,0,0,0.03)] hover:border-slate-300 dark:hover:border-slate-700 hover:shadow-md'
+          }`}
+        >
           <div className="flex items-center justify-between text-slate-500 mb-2">
-            <span className="text-[10px] sm:text-xs font-bold uppercase tracking-wider text-slate-400 dark:text-slate-500 truncate">Total Expenses</span>
-            <div className="p-2 rounded-xl bg-rose-50 dark:bg-rose-950/60 text-rose-600 dark:text-rose-400 border border-rose-100 dark:border-rose-800/60 flex-shrink-0 shadow-2xs">
-              <ArrowDownRight size={16} className="sm:w-[17px] sm:h-[17px]" />
+            <span className="text-[10px] sm:text-xs font-bold uppercase tracking-wider text-slate-400 dark:text-slate-500 truncate">
+              Total Expenses
+            </span>
+            <div className="flex items-center gap-1.5">
+              <div className="p-2 rounded-xl bg-rose-50 dark:bg-rose-950/60 text-rose-600 dark:text-rose-400 border border-rose-100 dark:border-rose-800/60 flex-shrink-0 shadow-2xs">
+                <ArrowDownRight size={16} className="sm:w-[17px] sm:h-[17px]" />
+              </div>
+              <ChevronDown
+                size={14}
+                className={`transition-transform duration-200 ${
+                  expandedCard === 'expense'
+                    ? 'rotate-180 text-rose-600 dark:text-rose-400'
+                    : 'text-slate-400 group-hover:text-slate-600 dark:group-hover:text-slate-300'
+                }`}
+              />
             </div>
           </div>
           <div className="text-lg sm:text-2xl font-black tracking-tight text-rose-600 dark:text-rose-400 truncate">
             {formatCurrency(totalExpenses, settings.currency, settings.showDecimals)}
           </div>
-          <div className="mt-2 text-[11px] sm:text-xs text-slate-400 dark:text-slate-500 font-medium truncate">
-            {filteredTransactions.filter((t) => t.type === 'expense').length} expense(s)
+          <div className="mt-2 text-[11px] sm:text-xs text-slate-500 dark:text-slate-400 font-medium flex items-center justify-between">
+            <span>{expenseTransactions.length} expense(s)</span>
+            <span className="text-[10px] font-bold text-rose-600 dark:text-rose-400 group-hover:underline">
+              {expandedCard === 'expense' ? 'Hide' : 'View all'}
+            </span>
           </div>
         </div>
 
         {/* Top Spending Category */}
-        <div className="bg-white/90 dark:bg-slate-900/80 backdrop-blur-md p-4 sm:p-5 rounded-2xl border border-slate-200/70 dark:border-slate-800/80 shadow-[0_2px_16px_rgba(0,0,0,0.03)] hover:shadow-md transition-all duration-200 hover:-translate-y-0.5">
+        <div
+          onClick={() => setExpandedCard((prev) => (prev === 'category' ? null : 'category'))}
+          className={`bg-white/90 dark:bg-slate-900/80 backdrop-blur-md p-4 sm:p-5 rounded-2xl border transition-all duration-200 hover:-translate-y-0.5 cursor-pointer group ${
+            expandedCard === 'category'
+              ? 'border-indigo-500 dark:border-indigo-500 ring-2 ring-indigo-500/30 shadow-md'
+              : 'border-slate-200/70 dark:border-slate-800/80 shadow-[0_2px_16px_rgba(0,0,0,0.03)] hover:border-slate-300 dark:hover:border-slate-700 hover:shadow-md'
+          }`}
+        >
           <div className="flex items-center justify-between text-slate-500 mb-2">
-            <span className="text-[10px] sm:text-xs font-bold uppercase tracking-wider text-slate-400 dark:text-slate-500 truncate">Top Category</span>
-            <div className="p-2 rounded-xl bg-indigo-50 dark:bg-indigo-950/60 text-indigo-600 dark:text-indigo-400 border border-indigo-100 dark:border-indigo-800/60 flex-shrink-0 shadow-2xs">
-              <TrendingUp size={16} className="sm:w-[17px] sm:h-[17px]" />
+            <span className="text-[10px] sm:text-xs font-bold uppercase tracking-wider text-slate-400 dark:text-slate-500 truncate">
+              Top Category
+            </span>
+            <div className="flex items-center gap-1.5">
+              <div className="p-2 rounded-xl bg-indigo-50 dark:bg-indigo-950/60 text-indigo-600 dark:text-indigo-400 border border-indigo-100 dark:border-indigo-800/60 flex-shrink-0 shadow-2xs">
+                <TrendingUp size={16} className="sm:w-[17px] sm:h-[17px]" />
+              </div>
+              <ChevronDown
+                size={14}
+                className={`transition-transform duration-200 ${
+                  expandedCard === 'category'
+                    ? 'rotate-180 text-indigo-600 dark:text-indigo-400'
+                    : 'text-slate-400 group-hover:text-slate-600 dark:group-hover:text-slate-300'
+                }`}
+              />
             </div>
           </div>
           <div className="text-base sm:text-lg font-black tracking-tight text-slate-900 dark:text-white truncate">
             {topSpendingCategory.category ? topSpendingCategory.category.name : 'None'}
           </div>
-          <div className="mt-2 text-[11px] sm:text-xs text-slate-500 dark:text-slate-400 font-medium truncate">
+          <div className="mt-2 text-[11px] sm:text-xs text-slate-500 dark:text-slate-400 font-medium flex items-center justify-between truncate">
             {topSpendingCategory.amount > 0 ? (
-              <span className="text-slate-700 dark:text-slate-300 font-bold truncate">
-                {formatCurrency(topSpendingCategory.amount, settings.currency, false)}
-              </span>
+              <>
+                <span className="text-slate-700 dark:text-slate-300 font-bold truncate">
+                  {formatCurrency(topSpendingCategory.amount, settings.currency, settings.showDecimals)}
+                </span>
+                <span className="text-[10px] font-bold text-indigo-600 dark:text-indigo-400 group-hover:underline">
+                  {expandedCard === 'category' ? 'Hide' : 'View all'}
+                </span>
+              </>
             ) : (
               'No expense data'
             )}
           </div>
         </div>
       </div>
+
+      {/* Expandable Details Drawer */}
+      {expandedCard && (
+        <div
+          ref={expandedPanelRef}
+          className="w-full bg-white/95 dark:bg-slate-900/90 backdrop-blur-xl p-4 sm:p-6 rounded-2xl border-2 border-indigo-500/30 dark:border-indigo-500/40 shadow-xl animate-fade-in transition-all"
+        >
+          {/* Card 1: Net Savings & Wallet Breakdown */}
+          {expandedCard === 'savings' && (
+            <div className="space-y-4">
+              <div className="flex items-center justify-between pb-3 border-b border-slate-100 dark:border-slate-800">
+                <div className="flex items-center gap-2.5">
+                  <div className="p-2 rounded-xl bg-indigo-50 dark:bg-indigo-950/60 text-indigo-600 dark:text-indigo-400 border border-indigo-100 dark:border-indigo-800/60 shadow-2xs">
+                    <Wallet size={18} />
+                  </div>
+                  <div>
+                    <h3 className="text-sm sm:text-base font-extrabold text-slate-900 dark:text-white">
+                      Wallet & Savings Breakdown
+                    </h3>
+                    <p className="text-[11px] sm:text-xs text-slate-400 dark:text-slate-500">
+                      Live balances and account activity for the active period
+                    </p>
+                  </div>
+                </div>
+                <button
+                  onClick={() => setExpandedCard(null)}
+                  className="p-1.5 text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 transition"
+                  title="Close breakdown"
+                >
+                  <X size={18} />
+                </button>
+              </div>
+
+              {/* Both Wallet Cards Side-by-side */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                {/* UPI Wallet Card */}
+                <div
+                  onClick={() => setWalletTab('upi')}
+                  className={`p-3.5 rounded-2xl border transition cursor-pointer ${
+                    walletTab === 'upi'
+                      ? 'bg-indigo-50/90 dark:bg-indigo-950/60 border-indigo-400 dark:border-indigo-600 ring-2 ring-indigo-500/20'
+                      : 'bg-slate-50/70 dark:bg-slate-800/50 border-slate-200/70 dark:border-slate-700/60 hover:bg-slate-100/60 dark:hover:bg-slate-800/80'
+                  }`}
+                >
+                  <div className="flex items-center justify-between mb-2">
+                    <div className="flex items-center gap-2">
+                      <div className="w-6 h-6 rounded-lg bg-indigo-600 text-white flex items-center justify-center shadow-2xs">
+                        <Smartphone size={13} />
+                      </div>
+                      <span className="text-xs font-bold text-indigo-700 dark:text-indigo-300">UPI / Online Balance</span>
+                    </div>
+                    <span className="text-xs font-black text-slate-900 dark:text-white">
+                      {formatCurrency(upiBalance, settings.currency, settings.showDecimals)}
+                    </span>
+                  </div>
+                  <div className="grid grid-cols-3 gap-2 pt-2 border-t border-slate-200/50 dark:border-slate-700/50 text-[10px] sm:text-[11px]">
+                    <div>
+                      <p className="text-slate-400 dark:text-slate-500">Period In</p>
+                      <p className="font-extrabold text-emerald-600 dark:text-emerald-400 truncate">
+                        +{formatCurrency(walletStats.periodUpiIncome, settings.currency, false)}
+                      </p>
+                    </div>
+                    <div>
+                      <p className="text-slate-400 dark:text-slate-500">Period Out</p>
+                      <p className="font-extrabold text-rose-600 dark:text-rose-400 truncate">
+                        -{formatCurrency(walletStats.periodUpiExpense, settings.currency, false)}
+                      </p>
+                    </div>
+                    <div>
+                      <p className="text-slate-400 dark:text-slate-500">Period Net</p>
+                      <p
+                        className={`font-extrabold truncate ${
+                          walletStats.periodUpiNet >= 0
+                            ? 'text-emerald-600 dark:text-emerald-400'
+                            : 'text-rose-600 dark:text-rose-400'
+                        }`}
+                      >
+                        {formatCurrency(walletStats.periodUpiNet, settings.currency, false)}
+                      </p>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Cash Wallet Card */}
+                <div
+                  onClick={() => setWalletTab('cash')}
+                  className={`p-3.5 rounded-2xl border transition cursor-pointer ${
+                    walletTab === 'cash'
+                      ? 'bg-emerald-50/90 dark:bg-emerald-950/60 border-emerald-400 dark:border-emerald-600 ring-2 ring-emerald-500/20'
+                      : 'bg-slate-50/70 dark:bg-slate-800/50 border-slate-200/70 dark:border-slate-700/60 hover:bg-slate-100/60 dark:hover:bg-slate-800/80'
+                  }`}
+                >
+                  <div className="flex items-center justify-between mb-2">
+                    <div className="flex items-center gap-2">
+                      <div className="w-6 h-6 rounded-lg bg-emerald-600 text-white flex items-center justify-center shadow-2xs">
+                        <Banknote size={13} />
+                      </div>
+                      <span className="text-xs font-bold text-emerald-700 dark:text-emerald-300">Cash in Hand</span>
+                    </div>
+                    <span
+                      className={`text-xs font-black ${
+                        cashBalance < 0 ? 'text-rose-600 dark:text-rose-400' : 'text-slate-900 dark:text-white'
+                      }`}
+                    >
+                      {formatCurrency(cashBalance, settings.currency, settings.showDecimals)}
+                    </span>
+                  </div>
+                  <div className="grid grid-cols-3 gap-2 pt-2 border-t border-slate-200/50 dark:border-slate-700/50 text-[10px] sm:text-[11px]">
+                    <div>
+                      <p className="text-slate-400 dark:text-slate-500">Period In</p>
+                      <p className="font-extrabold text-emerald-600 dark:text-emerald-400 truncate">
+                        +{formatCurrency(walletStats.periodCashIncome, settings.currency, false)}
+                      </p>
+                    </div>
+                    <div>
+                      <p className="text-slate-400 dark:text-slate-500">Period Out</p>
+                      <p className="font-extrabold text-rose-600 dark:text-rose-400 truncate">
+                        -{formatCurrency(walletStats.periodCashExpense, settings.currency, false)}
+                      </p>
+                    </div>
+                    <div>
+                      <p className="text-slate-400 dark:text-slate-500">Period Net</p>
+                      <p
+                        className={`font-extrabold truncate ${
+                          walletStats.periodCashNet >= 0
+                            ? 'text-emerald-600 dark:text-emerald-400'
+                            : 'text-rose-600 dark:text-rose-400'
+                        }`}
+                      >
+                        {formatCurrency(walletStats.periodCashNet, settings.currency, false)}
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Filter Tabs */}
+              <div className="flex items-center justify-between pt-1">
+                <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar">
+                  <button
+                    onClick={() => setWalletTab('all')}
+                    className={`px-3 py-1 rounded-xl text-xs font-bold transition active:scale-95 ${
+                      walletTab === 'all'
+                        ? 'bg-slate-900 dark:bg-white text-white dark:text-slate-900 shadow-2xs'
+                        : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-200'
+                    }`}
+                  >
+                    All ({filteredTransactions.length})
+                  </button>
+                  <button
+                    onClick={() => setWalletTab('upi')}
+                    className={`px-3 py-1 rounded-xl text-xs font-bold transition active:scale-95 ${
+                      walletTab === 'upi'
+                        ? 'bg-indigo-600 text-white shadow-2xs'
+                        : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-200'
+                    }`}
+                  >
+                    UPI ({upiTransactions.length})
+                  </button>
+                  <button
+                    onClick={() => setWalletTab('cash')}
+                    className={`px-3 py-1 rounded-xl text-xs font-bold transition active:scale-95 ${
+                      walletTab === 'cash'
+                        ? 'bg-emerald-600 text-white shadow-2xs'
+                        : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-200'
+                    }`}
+                  >
+                    Cash ({cashTransactions.length})
+                  </button>
+                </div>
+                <button
+                  onClick={() => onNavigateToTab('transactions')}
+                  className="text-xs font-bold text-indigo-600 dark:text-indigo-400 hover:underline flex items-center gap-1 whitespace-nowrap ml-2"
+                >
+                  <span>Ledger</span>
+                  <ExternalLink size={12} />
+                </button>
+              </div>
+
+              {/* Transactions List */}
+              <div className="max-h-72 overflow-y-auto space-y-1 divide-y divide-slate-100 dark:divide-slate-800/80 pr-1">
+                {savingsTransactions.length === 0 ? (
+                  <div className="py-8 text-center text-slate-400 dark:text-slate-500 text-xs">
+                    No transactions found for this wallet selection in this period.
+                  </div>
+                ) : (
+                  savingsTransactions.map((tx) => renderTransactionRow(tx))
+                )}
+              </div>
+            </div>
+          )}
+
+          {/* Card 2: Total Income */}
+          {expandedCard === 'income' && (
+            <div className="space-y-4">
+              <div className="flex items-center justify-between pb-3 border-b border-slate-100 dark:border-slate-800">
+                <div className="flex items-center gap-2.5">
+                  <div className="p-2 rounded-xl bg-emerald-50 dark:bg-emerald-950/60 text-emerald-600 dark:text-emerald-400 border border-emerald-100 dark:border-emerald-800/60 shadow-2xs">
+                    <ArrowUpRight size={18} />
+                  </div>
+                  <div>
+                    <h3 className="text-sm sm:text-base font-extrabold text-slate-900 dark:text-white">
+                      All Income Sources ({incomeTransactions.length})
+                    </h3>
+                    <p className="text-[11px] sm:text-xs text-slate-400 dark:text-slate-500">
+                      Total:{' '}
+                      <span className="font-extrabold text-emerald-600 dark:text-emerald-400">
+                        {formatCurrency(totalIncome, settings.currency, settings.showDecimals)}
+                      </span>{' '}
+                      credited in this period
+                    </p>
+                  </div>
+                </div>
+                <button
+                  onClick={() => setExpandedCard(null)}
+                  className="p-1.5 text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 transition"
+                  title="Close breakdown"
+                >
+                  <X size={18} />
+                </button>
+              </div>
+
+              {/* Income Categories Chips */}
+              {incomeByCategory.length > 0 && (
+                <div className="flex items-center gap-2 overflow-x-auto no-scrollbar py-1">
+                  {incomeByCategory.map((cat, idx) => (
+                    <div
+                      key={idx}
+                      className="px-2.5 py-1 rounded-xl bg-slate-100/80 dark:bg-slate-800/80 text-[11px] font-bold text-slate-700 dark:text-slate-300 flex items-center gap-1.5 whitespace-nowrap border border-slate-200/50 dark:border-slate-700/50"
+                    >
+                      <span className="w-2 h-2 rounded-full" style={{ backgroundColor: cat.color }} />
+                      <span>{cat.categoryName}:</span>
+                      <span className="text-emerald-600 dark:text-emerald-400 font-extrabold">
+                        {formatCurrency(cat.amount, settings.currency, false)}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {/* Transactions List */}
+              <div className="max-h-72 overflow-y-auto space-y-1 divide-y divide-slate-100 dark:divide-slate-800/80 pr-1">
+                {incomeTransactions.length === 0 ? (
+                  <div className="py-8 text-center text-slate-400 dark:text-slate-500 text-xs">
+                    <p>No income transactions recorded for this period.</p>
+                    <button
+                      onClick={onOpenAddModal}
+                      className="mt-2.5 px-3.5 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold transition inline-flex items-center gap-1"
+                    >
+                      <Plus size={14} />
+                      <span>Add Income</span>
+                    </button>
+                  </div>
+                ) : (
+                  incomeTransactions.map((tx) => renderTransactionRow(tx))
+                )}
+              </div>
+            </div>
+          )}
+
+          {/* Card 3: Total Expenses */}
+          {expandedCard === 'expense' && (
+            <div className="space-y-4">
+              <div className="flex items-center justify-between pb-3 border-b border-slate-100 dark:border-slate-800">
+                <div className="flex items-center gap-2.5">
+                  <div className="p-2 rounded-xl bg-rose-50 dark:bg-rose-950/60 text-rose-600 dark:text-rose-400 border border-rose-100 dark:border-rose-800/60 shadow-2xs">
+                    <ArrowDownRight size={18} />
+                  </div>
+                  <div>
+                    <h3 className="text-sm sm:text-base font-extrabold text-slate-900 dark:text-white">
+                      All Expense Transactions ({expenseTransactions.length})
+                    </h3>
+                    <p className="text-[11px] sm:text-xs text-slate-400 dark:text-slate-500">
+                      Total:{' '}
+                      <span className="font-extrabold text-rose-600 dark:text-rose-400">
+                        {formatCurrency(totalExpenses, settings.currency, settings.showDecimals)}
+                      </span>{' '}
+                      spent in this period
+                    </p>
+                  </div>
+                </div>
+                <button
+                  onClick={() => setExpandedCard(null)}
+                  className="p-1.5 text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 transition"
+                  title="Close breakdown"
+                >
+                  <X size={18} />
+                </button>
+              </div>
+
+              {/* Quick Split Pills */}
+              <div className="flex items-center gap-2 overflow-x-auto no-scrollbar py-1">
+                <div className="px-2.5 py-1 rounded-xl bg-indigo-50/70 dark:bg-indigo-950/50 text-[11px] font-bold text-indigo-700 dark:text-indigo-300 border border-indigo-100 dark:border-indigo-900/40 flex items-center gap-1.5 whitespace-nowrap">
+                  <Smartphone size={12} />
+                  <span>UPI Expenses:</span>
+                  <span className="font-extrabold text-rose-600 dark:text-rose-400">
+                    {formatCurrency(walletStats.periodUpiExpense, settings.currency, settings.showDecimals)}
+                  </span>
+                </div>
+                <div className="px-2.5 py-1 rounded-xl bg-emerald-50/70 dark:bg-emerald-950/50 text-[11px] font-bold text-emerald-700 dark:text-emerald-300 border border-emerald-100 dark:border-emerald-900/40 flex items-center gap-1.5 whitespace-nowrap">
+                  <Banknote size={12} />
+                  <span>Cash Expenses:</span>
+                  <span className="font-extrabold text-rose-600 dark:text-rose-400">
+                    {formatCurrency(walletStats.periodCashExpense, settings.currency, settings.showDecimals)}
+                  </span>
+                </div>
+              </div>
+
+              {/* Transactions List */}
+              <div className="max-h-72 overflow-y-auto space-y-1 divide-y divide-slate-100 dark:divide-slate-800/80 pr-1">
+                {expenseTransactions.length === 0 ? (
+                  <div className="py-8 text-center text-slate-400 dark:text-slate-500 text-xs">
+                    <p>No expense transactions recorded for this period.</p>
+                    <button
+                      onClick={onOpenAddModal}
+                      className="mt-2.5 px-3.5 py-1.5 bg-rose-600 hover:bg-rose-700 text-white rounded-xl text-xs font-bold transition inline-flex items-center gap-1"
+                    >
+                      <Plus size={14} />
+                      <span>Add Expense</span>
+                    </button>
+                  </div>
+                ) : (
+                  expenseTransactions.map((tx) => renderTransactionRow(tx))
+                )}
+              </div>
+            </div>
+          )}
+
+          {/* Card 4: Top Category */}
+          {expandedCard === 'category' && (
+            <div className="space-y-4">
+              <div className="flex items-center justify-between pb-3 border-b border-slate-100 dark:border-slate-800">
+                <div className="flex items-center gap-2.5">
+                  <div className="p-2 rounded-xl bg-indigo-50 dark:bg-indigo-950/60 text-indigo-600 dark:text-indigo-400 border border-indigo-100 dark:border-indigo-800/60 shadow-2xs">
+                    <TrendingUp size={18} />
+                  </div>
+                  <div>
+                    <h3 className="text-sm sm:text-base font-extrabold text-slate-900 dark:text-white">
+                      {topSpendingCategory.category
+                        ? `${topSpendingCategory.category.name} Expenses`
+                        : 'Top Category Expenses'}{' '}
+                      ({topCategoryTransactions.length})
+                    </h3>
+                    <p className="text-[11px] sm:text-xs text-slate-400 dark:text-slate-500">
+                      Total:{' '}
+                      <span className="font-extrabold text-indigo-600 dark:text-indigo-400">
+                        {formatCurrency(topSpendingCategory.amount, settings.currency, settings.showDecimals)}
+                      </span>{' '}
+                      • {topCategoryPercentage}% of total period spending
+                    </p>
+                  </div>
+                </div>
+                <button
+                  onClick={() => setExpandedCard(null)}
+                  className="p-1.5 text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 transition"
+                  title="Close breakdown"
+                >
+                  <X size={18} />
+                </button>
+              </div>
+
+              {/* Budget Progress if exists */}
+              {topCategoryBudget && (
+                <div className="p-3 bg-slate-50 dark:bg-slate-800/50 rounded-xl border border-slate-200/60 dark:border-slate-700/60">
+                  <div className="flex justify-between items-center text-xs mb-1.5">
+                    <span className="font-bold text-slate-700 dark:text-slate-300">
+                      Monthly Budget Utilization
+                    </span>
+                    <span className="text-slate-500 dark:text-slate-400 font-semibold">
+                      {formatCurrency(topCategoryBudget.spent, settings.currency, false)} /{' '}
+                      {formatCurrency(topCategoryBudget.monthlyLimit, settings.currency, false)} (
+                      {topCategoryBudget.percentage}%)
+                    </span>
+                  </div>
+                  <div className="w-full h-2 bg-slate-200 dark:bg-slate-700 rounded-full overflow-hidden">
+                    <div
+                      className={`h-full rounded-full transition-all duration-500 ${
+                        topCategoryBudget.isOver
+                          ? 'bg-rose-500'
+                          : topCategoryBudget.isWarning
+                          ? 'bg-amber-500'
+                          : 'bg-emerald-500'
+                      }`}
+                      style={{ width: `${Math.min(topCategoryBudget.percentage, 100)}%` }}
+                    />
+                  </div>
+                </div>
+              )}
+
+              {/* Transactions List */}
+              <div className="max-h-72 overflow-y-auto space-y-1 divide-y divide-slate-100 dark:divide-slate-800/80 pr-1">
+                {topCategoryTransactions.length === 0 ? (
+                  <div className="py-8 text-center text-slate-400 dark:text-slate-500 text-xs">
+                    No transactions found for this category in this period.
+                  </div>
+                ) : (
+                  topCategoryTransactions.map((tx) => renderTransactionRow(tx))
+                )}
+              </div>
+            </div>
+          )}
+        </div>
+      )}
 
       {/* Charts Grid */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
