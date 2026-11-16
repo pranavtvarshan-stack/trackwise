@@ -96,6 +96,16 @@ const MainApp: React.FC = () => {
               setAllRecurring([...recurring, ...missingRemote]);
             }
           }
+        } else if (recurring.length > 0) {
+          // Cloud has 0 recurring bills (e.g. newly created tab): seed cloud with local bills
+          performSync(
+            transactions,
+            budgets,
+            recurring,
+            upiBalance,
+            cashBalance,
+            settings.currency.symbol
+          );
         }
       }
       setIsInitialPullDone(true);

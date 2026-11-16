@@ -217,13 +217,14 @@ export async function pullDataFromSheet(
   // Ensure all 6 required sheets exist before reading
   const existingSheets = await ensureSheetsExist(accessToken, spreadsheetId);
 
-  const queryRanges: string[] = ['ranges=Transactions!A2:K', 'ranges=Budgets!A2:F'];
+  const queryRanges: string[] = ['Transactions!A2:K', 'Budgets!A2:F'];
   const hasRecurring = existingSheets.has('Recurring Bills');
   if (hasRecurring) {
-    queryRanges.push("ranges='Recurring Bills'!A2:K");
+    queryRanges.push("'Recurring Bills'!A2:K");
   }
 
-  const rangeQuery = queryRanges.join('&');
+  // URL-encode each range to safely handle spaces and quotes like 'Recurring Bills'!A2:K
+  const rangeQuery = queryRanges.map((r) => `ranges=${encodeURIComponent(r)}`).join('&');
   const res = await fetch(
     `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values:batchGet?${rangeQuery}`,
     {
@@ -235,6 +236,8 @@ export async function pullDataFromSheet(
 
   if (!res.ok) {
     if (res.status === 401) throw new Error('TOKEN_EXPIRED');
+    const errText = await res.text();
+    console.error('Failed to fetch sheet data:', res.status, errText);
     throw new Error(`Failed to fetch sheet data: ${res.statusText}`);
   }
 
@@ -244,7 +247,7 @@ export async function pullDataFromSheet(
   const recurringValueRange = hasRecurring ? data.valueRanges?.[2]?.values || [] : [];
 
   const transactions: Transaction[] = txValueRange
-    .filter((row: any[]) => row && row[0])
+    .filter((row: any[]) => row && row[0] && String(row[0]).toUpperCase() !== 'ID')
     .map((row: any[]) => {
       const isDeleted = row[10] === 'TRUE' || row[10] === true || row[10] === 'true';
       return {
@@ -265,7 +268,7 @@ export async function pullDataFromSheet(
     });
 
   const budgets: Budget[] = budgetValueRange
-    .filter((row: any[]) => row && row[0])
+    .filter((row: any[]) => row && row[0] && String(row[0]).toUpperCase() !== 'ID')
     .map((row: any[]) => {
       const isDeleted = row[5] === 'TRUE' || row[5] === true || row[5] === 'true';
       return {
@@ -280,7 +283,7 @@ export async function pullDataFromSheet(
     });
 
   const recurring: RecurringTransaction[] = recurringValueRange
-    .filter((row: any[]) => row && row[0])
+    .filter((row: any[]) => row && row[0] && String(row[0]).trim() !== '' && String(row[0]).toUpperCase() !== 'ID')
     .map((row: any[]) => {
       const active = row[9] === 'TRUE' || row[9] === true || row[9] === 'true' || row[9] === undefined || row[9] === '';
       const freq = String(row[6] || 'monthly').toLowerCase();
@@ -545,7 +548,21 @@ export async function pushDataToSheet(
   ];
 
   // 6. Prepare Recurring Bills rows
-  const recurringRows = recurring.map((r) => [
+  const recurringHeaders = [
+    'ID',
+    'Title',
+    'Amount',
+    'Type',
+    'Category ID',
+    'Payment Method',
+    'Frequency',
+    'Next Due Date',
+    'Start Date',
+    'Active',
+    'Notes',
+  ];
+
+  const recurringRows = (recurring || []).map((r) => [
     r.id,
     r.title,
     r.amount,
@@ -554,29 +571,34 @@ export async function pushDataToSheet(
     normalizePaymentMethod(r.paymentMethod),
     r.frequency,
     r.nextDueDate,
-    r.startDate,
+    r.startDate || '',
     r.active ? 'TRUE' : 'FALSE',
     r.notes || '',
   ]);
 
   const updateData: { range: string; values: any[][] }[] = [];
-  if (existingSheets.size === 0 || existingSheets.has('Transactions')) {
+  if (txRows.length > 0 && (existingSheets.size === 0 || existingSheets.has('Transactions'))) {
     updateData.push({ range: 'Transactions!A2:K', values: txRows });
   }
-  if (existingSheets.size === 0 || existingSheets.has('UPI Expenses')) {
+  if (upiRows.length > 0 && (existingSheets.size === 0 || existingSheets.has('UPI Expenses'))) {
     updateData.push({ range: "'UPI Expenses'!A2:H", values: upiRows });
   }
-  if (existingSheets.size === 0 || existingSheets.has('Cash Expenses')) {
+  if (cashRows.length > 0 && (existingSheets.size === 0 || existingSheets.has('Cash Expenses'))) {
     updateData.push({ range: "'Cash Expenses'!A2:H", values: cashRows });
   }
-  if (existingSheets.size === 0 || existingSheets.has('Budgets')) {
+  if (budgetRows.length > 0 && (existingSheets.size === 0 || existingSheets.has('Budgets'))) {
     updateData.push({ range: 'Budgets!A2:F', values: budgetRows });
   }
-  if (existingSheets.size === 0 || existingSheets.has('Accounts')) {
+  if (accountRows.length > 0 && (existingSheets.size === 0 || existingSheets.has('Accounts'))) {
     updateData.push({ range: 'Accounts!A2:D', values: accountRows });
   }
   if (existingSheets.size === 0 || existingSheets.has('Recurring Bills')) {
-    updateData.push({ range: "'Recurring Bills'!A2:K", values: recurringRows });
+    // Write headers in row 1 and all data rows directly below it.
+    // Guaranteed to be non-empty (at least headers), so Google Sheets batchUpdate never fails.
+    updateData.push({
+      range: "'Recurring Bills'!A1:K",
+      values: [recurringHeaders, ...recurringRows],
+    });
   }
 
   const updatePayload = {
