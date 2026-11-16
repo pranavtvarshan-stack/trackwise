@@ -1,4 +1,4 @@
-import { Transaction, Budget, GoogleUser } from '../types';
+import { Transaction, Budget, RecurringTransaction, GoogleUser } from '../types';
 import { normalizePaymentMethod } from '../utils/formatters';
 
 const SHEET_TITLE = 'TrackWise Pro - Personal Finance';
@@ -68,7 +68,7 @@ export async function findOrCreateTrackWiseSheet(
     };
   }
 
-  // Step 2: Create new spreadsheet with Transactions, UPI Expenses, Cash Expenses, Budgets, and Accounts tabs
+  // Step 2: Create new spreadsheet with 6 core tabs
   const createRes = await fetch('https://sheets.googleapis.com/v4/spreadsheets', {
     method: 'POST',
     headers: {
@@ -85,6 +85,7 @@ export async function findOrCreateTrackWiseSheet(
         { properties: { title: 'Cash Expenses' } },
         { properties: { title: 'Budgets' } },
         { properties: { title: 'Accounts' } },
+        { properties: { title: 'Recurring Bills' } },
       ],
     }),
   });
@@ -98,7 +99,7 @@ export async function findOrCreateTrackWiseSheet(
   const spreadsheetId = newSheet.spreadsheetId;
   const spreadsheetUrl = newSheet.spreadsheetUrl || `https://docs.google.com/spreadsheets/d/${spreadsheetId}/edit`;
 
-  // Step 3: Populate header rows for all 5 sheets
+  // Step 3: Populate header rows for all 6 sheets
   const headersPayload = {
     valueInputOption: 'USER_ENTERED',
     data: [
@@ -169,6 +170,24 @@ export async function findOrCreateTrackWiseSheet(
           ['Wallet / Account', 'Live Balance', 'Currency', 'Last Synced (UTC)'],
         ],
       },
+      {
+        range: "'Recurring Bills'!A1:K1",
+        values: [
+          [
+            'ID',
+            'Title',
+            'Amount',
+            'Type',
+            'Category ID',
+            'Payment Method',
+            'Frequency',
+            'Next Due Date',
+            'Start Date',
+            'Active',
+            'Notes',
+          ],
+        ],
+      },
     ],
   };
 
@@ -189,13 +208,22 @@ export async function findOrCreateTrackWiseSheet(
 }
 
 /**
- * Pull all rows from Transactions and Budgets sheets
+ * Pull all rows from Transactions, Budgets, and Recurring Bills sheets
  */
 export async function pullDataFromSheet(
   accessToken: string,
   spreadsheetId: string
-): Promise<{ transactions: Transaction[]; budgets: Budget[] }> {
-  const rangeQuery = 'ranges=Transactions!A2:K&ranges=Budgets!A2:F';
+): Promise<{ transactions: Transaction[]; budgets: Budget[]; recurring: RecurringTransaction[] }> {
+  // Ensure all 6 required sheets exist before reading
+  const existingSheets = await ensureSheetsExist(accessToken, spreadsheetId);
+
+  const queryRanges: string[] = ['ranges=Transactions!A2:K', 'ranges=Budgets!A2:F'];
+  const hasRecurring = existingSheets.has('Recurring Bills');
+  if (hasRecurring) {
+    queryRanges.push("ranges='Recurring Bills'!A2:K");
+  }
+
+  const rangeQuery = queryRanges.join('&');
   const res = await fetch(
     `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values:batchGet?${rangeQuery}`,
     {
@@ -213,6 +241,7 @@ export async function pullDataFromSheet(
   const data = await res.json();
   const txValueRange = data.valueRanges?.[0]?.values || [];
   const budgetValueRange = data.valueRanges?.[1]?.values || [];
+  const recurringValueRange = hasRecurring ? data.valueRanges?.[2]?.values || [] : [];
 
   const transactions: Transaction[] = txValueRange
     .filter((row: any[]) => row && row[0])
@@ -250,11 +279,32 @@ export async function pullDataFromSheet(
       };
     });
 
-  return { transactions, budgets };
+  const recurring: RecurringTransaction[] = recurringValueRange
+    .filter((row: any[]) => row && row[0])
+    .map((row: any[]) => {
+      const active = row[9] === 'TRUE' || row[9] === true || row[9] === 'true' || row[9] === undefined || row[9] === '';
+      const freq = String(row[6] || 'monthly').toLowerCase();
+      const validFreq = ['daily', 'weekly', 'monthly', 'yearly'].includes(freq) ? freq : 'monthly';
+      return {
+        id: String(row[0]),
+        title: String(row[1] || 'Recurring Bill'),
+        amount: parseFloat(row[2]) || 0,
+        type: row[3] === 'income' ? 'income' : 'expense',
+        categoryId: String(row[4] || 'cat_utilities'),
+        paymentMethod: normalizePaymentMethod(row[5]),
+        frequency: validFreq as any,
+        nextDueDate: String(row[7] || new Date().toISOString().split('T')[0]),
+        startDate: String(row[8] || new Date().toISOString().split('T')[0]),
+        active,
+        notes: row[10] ? String(row[10]) : undefined,
+      };
+    });
+
+  return { transactions, budgets, recurring };
 }
 
 /**
- * Ensure all 5 required sheets exist in the spreadsheet (auto-upgrades older 3-sheet spreadsheets)
+ * Ensure all 6 required sheets exist in the spreadsheet (auto-upgrades older spreadsheets)
  */
 async function ensureSheetsExist(accessToken: string, spreadsheetId: string): Promise<Set<string>> {
   const existingTitles = new Set<string>();
@@ -278,7 +328,7 @@ async function ensureSheetsExist(accessToken: string, spreadsheetId: string): Pr
       if (s.properties?.title) existingTitles.add(s.properties.title);
     });
 
-    const requiredSheets = ['Transactions', 'UPI Expenses', 'Cash Expenses', 'Budgets', 'Accounts'];
+    const requiredSheets = ['Transactions', 'UPI Expenses', 'Cash Expenses', 'Budgets', 'Accounts', 'Recurring Bills'];
     const missingSheets = requiredSheets.filter((title) => !existingTitles.has(title));
 
     if (missingSheets.length > 0) {
@@ -339,6 +389,26 @@ async function ensureSheetsExist(accessToken: string, spreadsheetId: string): Pr
           values: [['Wallet / Account', 'Live Balance', 'Currency', 'Last Synced (UTC)']],
         });
       }
+      if (missingSheets.includes('Recurring Bills') && existingTitles.has('Recurring Bills')) {
+        newHeadersData.push({
+          range: "'Recurring Bills'!A1:K1",
+          values: [
+            [
+              'ID',
+              'Title',
+              'Amount',
+              'Type',
+              'Category ID',
+              'Payment Method',
+              'Frequency',
+              'Next Due Date',
+              'Start Date',
+              'Active',
+              'Notes',
+            ],
+          ],
+        });
+      }
 
       if (newHeadersData.length > 0) {
         await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values:batchUpdate`, {
@@ -361,18 +431,19 @@ async function ensureSheetsExist(accessToken: string, spreadsheetId: string): Pr
 }
 
 /**
- * Push full current state (including soft deletes, 5-sheet structure with UPI/Cash expense totals) to Google Sheet
+ * Push full current state (including soft deletes, 6-sheet structure with UPI/Cash expense totals and Recurring Bills) to Google Sheet
  */
 export async function pushDataToSheet(
   accessToken: string,
   spreadsheetId: string,
   transactions: Transaction[],
   budgets: Budget[],
+  recurring: RecurringTransaction[],
   upiBalance: number,
   cashBalance: number,
   currencySymbol: string = '₹'
 ): Promise<void> {
-  // Ensure all 5 sheets exist (Transactions, UPI Expenses, Cash Expenses, Budgets, Accounts)
+  // Ensure all 6 sheets exist (Transactions, UPI Expenses, Cash Expenses, Budgets, Accounts, Recurring Bills)
   const existingSheets = await ensureSheetsExist(accessToken, spreadsheetId);
 
   // Clear existing data rows below headers only for existing sheets
@@ -382,6 +453,7 @@ export async function pushDataToSheet(
   if (existingSheets.size === 0 || existingSheets.has('Cash Expenses')) rangesToClear.push("'Cash Expenses'!A2:H");
   if (existingSheets.size === 0 || existingSheets.has('Budgets')) rangesToClear.push('Budgets!A2:F');
   if (existingSheets.size === 0 || existingSheets.has('Accounts')) rangesToClear.push('Accounts!A2:D');
+  if (existingSheets.size === 0 || existingSheets.has('Recurring Bills')) rangesToClear.push("'Recurring Bills'!A2:K");
 
   if (rangesToClear.length > 0) {
     await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values:batchClear`, {
@@ -472,6 +544,21 @@ export async function pushDataToSheet(
     ['Total Net Balance', totalNetBalance, currencySymbol, nowIso],
   ];
 
+  // 6. Prepare Recurring Bills rows
+  const recurringRows = recurring.map((r) => [
+    r.id,
+    r.title,
+    r.amount,
+    r.type,
+    r.categoryId,
+    normalizePaymentMethod(r.paymentMethod),
+    r.frequency,
+    r.nextDueDate,
+    r.startDate,
+    r.active ? 'TRUE' : 'FALSE',
+    r.notes || '',
+  ]);
+
   const updateData: { range: string; values: any[][] }[] = [];
   if (existingSheets.size === 0 || existingSheets.has('Transactions')) {
     updateData.push({ range: 'Transactions!A2:K', values: txRows });
@@ -487,6 +574,9 @@ export async function pushDataToSheet(
   }
   if (existingSheets.size === 0 || existingSheets.has('Accounts')) {
     updateData.push({ range: 'Accounts!A2:D', values: accountRows });
+  }
+  if (existingSheets.size === 0 || existingSheets.has('Recurring Bills')) {
+    updateData.push({ range: "'Recurring Bills'!A2:K", values: recurringRows });
   }
 
   const updatePayload = {

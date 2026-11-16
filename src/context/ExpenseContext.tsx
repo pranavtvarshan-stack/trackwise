@@ -76,6 +76,7 @@ interface ExpenseContextType {
   deleteTransaction: (id: string) => void;
   setAllTransactions: (txs: Transaction[]) => void;
   setAllBudgets: (bds: Budget[]) => void;
+  setAllRecurring: (recs: RecurringTransaction[]) => void;
 
   // Actions - Categories
   addCategory: (category: Omit<Category, 'id'>) => void;
@@ -676,6 +677,7 @@ export const ExpenseProvider: React.FC<{ children: React.ReactNode }> = ({ child
         deleteTransaction,
         setAllTransactions: setTransactions,
         setAllBudgets: setBudgets,
+        setAllRecurring: setRecurring,
         addCategory,
         updateCategory,
         deleteCategory,

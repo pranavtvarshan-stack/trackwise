@@ -37,7 +37,8 @@ export const Header: React.FC<HeaderProps> = ({ onOpenAddModal, onNavigateToTab,
     cashBalance,
     settings,
     setAllTransactions,
-    setAllBudgets
+    setAllBudgets,
+    setAllRecurring
   } = useExpense();
 
   const {
@@ -88,6 +89,7 @@ export const Header: React.FC<HeaderProps> = ({ onOpenAddModal, onNavigateToTab,
       const remote = await pullFromSheet();
       let currentTransactions = transactions;
       let currentBudgets = budgets;
+      let currentRecurring = recurring;
       if (remote) {
         if (remote.transactions.length > 0) {
           if (transactions.length === 0) {
@@ -106,11 +108,25 @@ export const Header: React.FC<HeaderProps> = ({ onOpenAddModal, onNavigateToTab,
           currentBudgets = remote.budgets;
           setAllBudgets(remote.budgets);
         }
+        if (remote.recurring && remote.recurring.length > 0) {
+          if (recurring.length === 0) {
+            currentRecurring = remote.recurring;
+            setAllRecurring(remote.recurring);
+          } else {
+            const localIds = new Set(recurring.map((r) => r.id));
+            const missing = remote.recurring.filter((r) => !localIds.has(r.id));
+            if (missing.length > 0) {
+              currentRecurring = [...recurring, ...missing];
+              setAllRecurring(currentRecurring);
+            }
+          }
+        }
       }
 
       await performSync(
         currentTransactions,
         currentBudgets,
+        currentRecurring,
         upiBalance,
         cashBalance,
         settings.currency.symbol

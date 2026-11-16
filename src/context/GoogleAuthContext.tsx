@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useState, useEffect, useCallback, useRef } from 'react';
-import { GoogleUser, GoogleSyncInfo, SyncState, Transaction, Budget } from '../types';
+import { GoogleUser, GoogleSyncInfo, SyncState, Transaction, Budget, RecurringTransaction } from '../types';
 import {
   fetchGoogleUserInfo,
   findOrCreateTrackWiseSheet,
@@ -34,11 +34,12 @@ interface GoogleAuthContextType {
   performSync: (
     transactions: Transaction[],
     budgets: Budget[],
+    recurring: RecurringTransaction[],
     upiBalance: number,
     cashBalance: number,
     currencySymbol: string
   ) => Promise<boolean>;
-  pullFromSheet: () => Promise<{ transactions: Transaction[]; budgets: Budget[] } | null>;
+  pullFromSheet: () => Promise<{ transactions: Transaction[]; budgets: Budget[]; recurring: RecurringTransaction[] } | null>;
 }
 
 const GoogleAuthContext = createContext<GoogleAuthContextType | undefined>(undefined);
@@ -244,10 +245,10 @@ export const GoogleAuthProvider: React.FC<{ children: React.ReactNode }> = ({ ch
   }, []);
 
   /**
-   * Pull all transactions and budgets from Google Sheets
+   * Pull all transactions, budgets, and recurring bills from Google Sheets
    */
   const pullFromSheet = useCallback(
-    async (): Promise<{ transactions: Transaction[]; budgets: Budget[] } | null> => {
+    async (): Promise<{ transactions: Transaction[]; budgets: Budget[]; recurring: RecurringTransaction[] } | null> => {
       if (!accessToken || !navigator.onLine) return null;
       try {
         let sheetId = syncInfo.spreadsheetId;
@@ -300,6 +301,7 @@ export const GoogleAuthProvider: React.FC<{ children: React.ReactNode }> = ({ ch
     async (
       transactions: Transaction[],
       budgets: Budget[],
+      recurring: RecurringTransaction[],
       upiBalance: number,
       cashBalance: number,
       currencySymbol: string
@@ -335,6 +337,7 @@ export const GoogleAuthProvider: React.FC<{ children: React.ReactNode }> = ({ ch
           sheetId,
           transactions,
           budgets,
+          recurring,
           upiBalance,
           cashBalance,
           currencySymbol

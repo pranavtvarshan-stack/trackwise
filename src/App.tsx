@@ -23,11 +23,13 @@ const MainApp: React.FC = () => {
     closeExportModal,
     transactions,
     budgets,
+    recurring,
     upiBalance,
     cashBalance,
     settings,
     setAllTransactions,
-    setAllBudgets
+    setAllBudgets,
+    setAllRecurring
   } = useExpense();
 
   const [activeTab, setActiveTab] = useState('dashboard');
@@ -84,6 +86,17 @@ const MainApp: React.FC = () => {
         if (remoteData.budgets.length > 0 && budgets.length === 0) {
           setAllBudgets(remoteData.budgets);
         }
+        if (remoteData.recurring && remoteData.recurring.length > 0) {
+          if (recurring.length === 0) {
+            setAllRecurring(remoteData.recurring);
+          } else {
+            const localIds = new Set(recurring.map((r) => r.id));
+            const missingRemote = remoteData.recurring.filter((r) => !localIds.has(r.id));
+            if (missingRemote.length > 0) {
+              setAllRecurring([...recurring, ...missingRemote]);
+            }
+          }
+        }
       }
       setIsInitialPullDone(true);
     });
@@ -93,12 +106,13 @@ const MainApp: React.FC = () => {
   useEffect(() => {
     if (!user || isTokenExpired || !navigator.onLine) return;
     // Prevent an empty local state on a new domain from pushing before cloud data is checked
-    if (!isInitialPullDone && transactions.length === 0) return;
+    if (!isInitialPullDone && transactions.length === 0 && recurring.length === 0) return;
 
     const timer = setTimeout(() => {
       performSync(
         transactions,
         budgets,
+        recurring,
         upiBalance,
         cashBalance,
         settings.currency.symbol
@@ -106,7 +120,7 @@ const MainApp: React.FC = () => {
     }, 1500);
 
     return () => clearTimeout(timer);
-  }, [transactions, budgets, user, isTokenExpired, upiBalance, cashBalance, settings.currency.symbol, isInitialPullDone]);
+  }, [transactions, budgets, recurring, user, isTokenExpired, upiBalance, cashBalance, settings.currency.symbol, isInitialPullDone]);
 
   // Sync on Reconnecting Online
   useEffect(() => {
@@ -115,6 +129,7 @@ const MainApp: React.FC = () => {
         performSync(
           transactions,
           budgets,
+          recurring,
           upiBalance,
           cashBalance,
           settings.currency.symbol
@@ -123,7 +138,7 @@ const MainApp: React.FC = () => {
     };
     window.addEventListener('online', handleOnlineSync);
     return () => window.removeEventListener('online', handleOnlineSync);
-  }, [user, isTokenExpired, transactions, budgets, upiBalance, cashBalance, settings.currency.symbol]);
+  }, [user, isTokenExpired, transactions, budgets, recurring, upiBalance, cashBalance, settings.currency.symbol]);
 
   // Global Keyboard Shortcuts
   useEffect(() => {
