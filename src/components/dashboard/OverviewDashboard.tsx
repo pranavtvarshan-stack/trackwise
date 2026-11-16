@@ -460,8 +460,8 @@ export const OverviewDashboard: React.FC<OverviewDashboardProps> = ({
             </div>
           </div>
 
-          {/* Split Wallets (UPI vs Liquid Cash) - Stacked vertically on mobile to prevent truncation */}
-          <div className="mt-3 pt-3 border-t border-slate-100 dark:border-slate-800/80 flex flex-col gap-1.5 sm:grid sm:grid-cols-2 sm:gap-2">
+          {/* Split Wallets (UPI vs Liquid Cash) - Clean vertical layout with ample breathing room */}
+          <div className="mt-3 pt-2.5 border-t border-slate-100 dark:border-slate-800/80 flex flex-col gap-1.5">
             <button
               type="button"
               onClick={(e) => {
@@ -469,24 +469,24 @@ export const OverviewDashboard: React.FC<OverviewDashboardProps> = ({
                 setExpandedCard('savings');
                 setWalletTab('upi');
               }}
-              className={`w-full flex items-center justify-between p-1.5 sm:p-2 rounded-xl transition-all duration-150 active:scale-95 text-left ${
+              className={`w-full flex items-center justify-between px-2.5 py-1.5 rounded-xl transition-all duration-150 active:scale-95 text-left ${
                 expandedCard === 'savings' && walletTab === 'upi'
-                  ? 'bg-indigo-100/90 dark:bg-indigo-900/60 border-2 border-indigo-500 shadow-xs'
+                  ? 'bg-indigo-100/90 dark:bg-indigo-900/60 border border-indigo-500 shadow-xs'
                   : 'bg-indigo-50/70 dark:bg-indigo-950/50 border border-indigo-100/70 dark:border-indigo-900/40 hover:bg-indigo-100/50 dark:hover:bg-indigo-900/40'
               }`}
               title="Click to view UPI breakdown"
             >
-              <div className="flex items-center gap-1.5 min-w-0">
+              <div className="flex items-center gap-2 flex-shrink-0">
                 <div className="w-5 h-5 rounded-lg bg-indigo-600 text-white flex items-center justify-center flex-shrink-0 shadow-2xs">
                   <Smartphone size={11} />
                 </div>
-                <p className="text-[9px] font-extrabold uppercase tracking-wider text-indigo-700 dark:text-indigo-300">
+                <span className="text-[10px] font-extrabold uppercase tracking-wider text-indigo-700 dark:text-indigo-300">
                   UPI
-                </p>
+                </span>
               </div>
-              <p className="text-[11px] sm:text-xs font-black text-slate-900 dark:text-white pl-1 whitespace-nowrap">
+              <span className="text-xs font-black text-slate-900 dark:text-white tabular-nums pl-2">
                 {formatCurrency(upiBalance, settings.currency, settings.showDecimals)}
-              </p>
+              </span>
             </button>
 
             <button
@@ -496,28 +496,28 @@ export const OverviewDashboard: React.FC<OverviewDashboardProps> = ({
                 setExpandedCard('savings');
                 setWalletTab('cash');
               }}
-              className={`w-full flex items-center justify-between p-1.5 sm:p-2 rounded-xl transition-all duration-150 active:scale-95 text-left ${
+              className={`w-full flex items-center justify-between px-2.5 py-1.5 rounded-xl transition-all duration-150 active:scale-95 text-left ${
                 expandedCard === 'savings' && walletTab === 'cash'
-                  ? 'bg-emerald-100/90 dark:bg-emerald-900/60 border-2 border-emerald-500 shadow-xs'
+                  ? 'bg-emerald-100/90 dark:bg-emerald-900/60 border border-emerald-500 shadow-xs'
                   : 'bg-emerald-50/70 dark:bg-emerald-950/50 border border-emerald-100/70 dark:border-emerald-900/40 hover:bg-emerald-100/50 dark:hover:bg-emerald-900/40'
               }`}
               title="Click to view Cash breakdown"
             >
-              <div className="flex items-center gap-1.5 min-w-0">
+              <div className="flex items-center gap-2 flex-shrink-0">
                 <div className="w-5 h-5 rounded-lg bg-emerald-600 text-white flex items-center justify-center flex-shrink-0 shadow-2xs">
                   <Banknote size={11} />
                 </div>
-                <p className="text-[9px] font-extrabold uppercase tracking-wider text-emerald-700 dark:text-emerald-300">
+                <span className="text-[10px] font-extrabold uppercase tracking-wider text-emerald-700 dark:text-emerald-300">
                   Cash
-                </p>
+                </span>
               </div>
-              <p
-                className={`text-[11px] sm:text-xs font-black pl-1 whitespace-nowrap ${
+              <span
+                className={`text-xs font-black tabular-nums pl-2 ${
                   cashBalance < 0 ? 'text-rose-600 dark:text-rose-400' : 'text-slate-900 dark:text-white'
                 }`}
               >
                 {formatCurrency(cashBalance, settings.currency, settings.showDecimals)}
-              </p>
+              </span>
             </button>
           </div>
         </div>
