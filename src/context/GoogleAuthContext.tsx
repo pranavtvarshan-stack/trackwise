@@ -319,7 +319,16 @@ export const GoogleAuthProvider: React.FC<{ children: React.ReactNode }> = ({ ch
           }),
         });
 
-        const exchangeData = await exchangeRes.json();
+        const rawText = await exchangeRes.text();
+        let exchangeData: any;
+        try {
+          exchangeData = JSON.parse(rawText);
+        } catch {
+          throw new Error(
+            `Authentication server error (${exchangeRes.status}). Check that GOOGLE_CLIENT_SECRET is configured in Vercel project settings.`
+          );
+        }
+
         if (!exchangeRes.ok || exchangeData.error) {
           throw new Error(exchangeData.error || 'Failed to exchange authorization code.');
         }

@@ -1,11 +1,68 @@
-import {
-  getRequestBody,
-  sendJson,
-  serializeCookie,
-  REFRESH_COOKIE_NAME,
-  REFRESH_COOKIE_MAX_AGE,
-  isSecureConnection,
-} from '../_lib/authUtils';
+const REFRESH_COOKIE_NAME = 'trackwise_refresh_token';
+const REFRESH_COOKIE_MAX_AGE = 180 * 24 * 60 * 60; // 180 days in seconds
+
+function serializeCookie(
+  name: string,
+  val: string,
+  options: {
+    maxAge?: number;
+    path?: string;
+    httpOnly?: boolean;
+    secure?: boolean;
+    sameSite?: 'Lax' | 'Strict' | 'None';
+  } = {}
+): string {
+  const parts = [`${name}=${encodeURIComponent(val)}`];
+  if (options.path) parts.push(`Path=${options.path}`);
+  if (options.maxAge !== undefined) parts.push(`Max-Age=${options.maxAge}`);
+  if (options.httpOnly) parts.push('HttpOnly');
+  if (options.secure) parts.push('Secure');
+  if (options.sameSite) parts.push(`SameSite=${options.sameSite}`);
+  return parts.join('; ');
+}
+
+async function getRequestBody(req: any): Promise<any> {
+  if (req.body) {
+    if (typeof req.body === 'string') {
+      try {
+        return JSON.parse(req.body);
+      } catch {
+        return {};
+      }
+    }
+    return req.body;
+  }
+  return new Promise((resolve) => {
+    let data = '';
+    req.on('data', (chunk: any) => {
+      data += chunk;
+    });
+    req.on('end', () => {
+      try {
+        resolve(data ? JSON.parse(data) : {});
+      } catch {
+        resolve({});
+      }
+    });
+    req.on('error', () => resolve({}));
+  });
+}
+
+function sendJson(res: any, status: number, data: any) {
+  if (typeof res.status === 'function' && typeof res.json === 'function') {
+    return res.status(status).json(data);
+  }
+  res.statusCode = status;
+  res.setHeader('Content-Type', 'application/json');
+  res.end(JSON.stringify(data));
+}
+
+function isSecureConnection(req: any): boolean {
+  if (process.env.NODE_ENV === 'production') return true;
+  const proto = req.headers?.['x-forwarded-proto'];
+  if (proto === 'https') return true;
+  return false;
+}
 
 export default async function handler(req: any, res: any) {
   if (req.method !== 'POST') {
@@ -19,19 +76,23 @@ export default async function handler(req: any, res: any) {
       return sendJson(res, 400, { error: 'Missing authorization code' });
     }
 
-    const clientId = process.env.VITE_GOOGLE_CLIENT_ID || process.env.GOOGLE_CLIENT_ID;
+    const clientId =
+      process.env.VITE_GOOGLE_CLIENT_ID ||
+      process.env.GOOGLE_CLIENT_ID ||
+      process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID;
     const clientSecret = process.env.GOOGLE_CLIENT_SECRET;
 
     if (!clientId) {
       return sendJson(res, 500, {
-        error: 'Server misconfiguration: VITE_GOOGLE_CLIENT_ID is not configured.',
+        error:
+          'Server configuration error: VITE_GOOGLE_CLIENT_ID is not configured in Vercel environment variables.',
       });
     }
 
     if (!clientSecret) {
       return sendJson(res, 500, {
         error:
-          'Server misconfiguration: GOOGLE_CLIENT_SECRET is missing. Please set GOOGLE_CLIENT_SECRET in your environment or Vercel project settings.',
+          'Server configuration error: GOOGLE_CLIENT_SECRET is missing. Please add GOOGLE_CLIENT_SECRET in your Vercel Project Settings -> Environment Variables.',
       });
     }
 
@@ -92,4 +153,3 @@ export default async function handler(req: any, res: any) {
     });
   }
 }
-
