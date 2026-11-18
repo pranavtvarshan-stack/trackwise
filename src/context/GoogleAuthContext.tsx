@@ -100,14 +100,28 @@ export const GoogleAuthProvider: React.FC<{ children: React.ReactNode }> = ({ ch
       const client = window.google.accounts.oauth2.initTokenClient({
         client_id: effectiveClientId,
         scope: 'openid email profile https://www.googleapis.com/auth/drive.file https://www.googleapis.com/auth/spreadsheets',
+        error_callback: (nonOAuthError: any) => {
+          console.error('Google Token Client non-OAuth error:', nonOAuthError);
+          const msg = nonOAuthError?.message || nonOAuthError?.type || 'Failed to open Google Sign-In popup.';
+          alert(`Google Sign-In Error: ${msg}\n\nTip: Please verify popups are allowed and your current URL is added to Authorized JavaScript Origins in Google Cloud Console.`);
+        },
         callback: async (tokenResponse: any) => {
           if (tokenResponse.error) {
             console.error('Google Auth callback error:', tokenResponse);
+            const errorDesc = tokenResponse.error_description || tokenResponse.error;
             setSyncInfo((prev) => ({
               ...prev,
               syncState: 'error',
-              errorMessage: tokenResponse.error_description || tokenResponse.error,
+              errorMessage: errorDesc,
             }));
+
+            if (tokenResponse.error !== 'popup_closed_by_user') {
+              if (tokenResponse.error === 'access_denied') {
+                alert(`Google Sign-In Blocked (access_denied):\n\nYour Google OAuth app is in "Testing" mode. Only Google accounts added to "Test users" in Google Cloud Console can sign in.\n\nPlease add your Gmail to Test Users in Google Cloud Console -> OAuth consent screen, or publish the app.`);
+              } else {
+                alert(`Google Sign-In Error: ${errorDesc}`);
+              }
+            }
             return;
           }
 
@@ -146,6 +160,7 @@ export const GoogleAuthProvider: React.FC<{ children: React.ReactNode }> = ({ ch
                 syncState: 'error',
                 errorMessage: err.message,
               }));
+              alert(`Connected to Google, but failed to initialize Sheet: ${err.message}\n\nPlease check if Google Drive API and Google Sheets API are enabled in Google Cloud Console.`);
             }
           }
         },
