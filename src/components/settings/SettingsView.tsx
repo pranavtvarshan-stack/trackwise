@@ -20,11 +20,7 @@ import {
   FileSpreadsheet,
   ExternalLink,
   LogOut,
-  AlertTriangle,
-  Smartphone,
-  Key,
-  Copy,
-  Loader2
+  AlertTriangle
 } from 'lucide-react';
 import { useExpense } from '../../context/ExpenseContext';
 import { useGoogleAuth } from '../../context/GoogleAuthContext';
@@ -73,55 +69,12 @@ export const SettingsView: React.FC = () => {
     loginWithGoogle,
     logout,
     reconnectSync,
-    isTokenExpired,
-    exportPairingToken,
+    isTokenExpired
   } = useGoogleAuth();
 
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
   const [avatarError, setAvatarError] = useState(false);
-
-  // iOS Safari -> PWA Pairing State
-  const [pairingToken, setPairingToken] = useState<string | null>(null);
-  const [isGeneratingPairing, setIsGeneratingPairing] = useState(false);
-  const [pairingError, setPairingError] = useState<string | null>(null);
-  const [pairingCountdown, setPairingCountdown] = useState<number>(0);
-  const [hasCopiedPairing, setHasCopiedPairing] = useState(false);
-
-  React.useEffect(() => {
-    if (pairingCountdown <= 0) {
-      if (pairingToken) {
-        setPairingToken(null);
-      }
-      return;
-    }
-    const timer = setInterval(() => {
-      setPairingCountdown((prev) => prev - 1);
-    }, 1000);
-    return () => clearInterval(timer);
-  }, [pairingCountdown, pairingToken]);
-
-  const handleGeneratePairingToken = async () => {
-    setIsGeneratingPairing(true);
-    setPairingError(null);
-    try {
-      const token = await exportPairingToken();
-      setPairingToken(token);
-      setPairingCountdown(120);
-      setHasCopiedPairing(false);
-    } catch (err: any) {
-      setPairingError(err.message || 'Failed to generate iOS PWA pairing token.');
-    } finally {
-      setIsGeneratingPairing(false);
-    }
-  };
-
-  const handleCopyPairingToken = () => {
-    if (!pairingToken) return;
-    navigator.clipboard.writeText(pairingToken);
-    setHasCopiedPairing(true);
-    setTimeout(() => setHasCopiedPairing(false), 2500);
-  };
 
   React.useEffect(() => {
     setAvatarError(false);
@@ -795,83 +748,6 @@ export const SettingsView: React.FC = () => {
                 <button onClick={reconnectSync} className="text-amber-600 dark:text-amber-400 font-bold hover:underline">
                   Session expired — click to reconnect
                 </button>
-              )}
-            </div>
-
-            {/* iOS PWA Safari Pairing Handoff */}
-            <div className="p-4 rounded-xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200/70 dark:border-slate-700/70 space-y-3 mt-2">
-              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-                <div className="flex items-start gap-2.5">
-                  <div className="p-1.5 rounded-lg bg-indigo-100 dark:bg-indigo-950/60 text-indigo-600 dark:text-indigo-400 flex-shrink-0 mt-0.5">
-                    <Smartphone size={16} />
-                  </div>
-                  <div>
-                    <h4 className="text-xs font-bold text-slate-800 dark:text-white">iOS PWA Pairing Handoff</h4>
-                    <p className="text-[11px] text-slate-400 dark:text-slate-500">
-                      Using TrackWise from your iPhone Home Screen? iOS isolates standalone PWAs from Safari. Generate a 2-minute pairing code to authorize your installed PWA.
-                    </p>
-                  </div>
-                </div>
-
-                {!pairingToken && (
-                  <button
-                    type="button"
-                    onClick={handleGeneratePairingToken}
-                    disabled={isGeneratingPairing}
-                    className="flex-shrink-0 px-3.5 py-2 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white rounded-xl text-xs font-bold transition flex items-center justify-center gap-1.5 shadow-2xs cursor-pointer"
-                  >
-                    {isGeneratingPairing ? (
-                      <>
-                        <Loader2 size={13} className="animate-spin" />
-                        <span>Generating...</span>
-                      </>
-                    ) : (
-                      <>
-                        <Key size={13} />
-                        <span>Generate Pairing Code</span>
-                      </>
-                    )}
-                  </button>
-                )}
-              </div>
-
-              {pairingError && (
-                <p className="text-xs text-rose-600 dark:text-rose-400 font-semibold">{pairingError}</p>
-              )}
-
-              {pairingToken && (
-                <div className="p-3 bg-white dark:bg-slate-900 rounded-xl border border-indigo-200 dark:border-indigo-800/80 space-y-2 animate-fade-in">
-                  <div className="flex items-center justify-between text-xs">
-                    <span className="font-semibold text-slate-700 dark:text-slate-300">
-                      Pairing Token (Valid for <span className="text-indigo-600 dark:text-indigo-400 font-bold">{pairingCountdown}s</span>):
-                    </span>
-                    <button
-                      type="button"
-                      onClick={handleCopyPairingToken}
-                      className="flex items-center gap-1 text-xs font-bold text-indigo-600 dark:text-indigo-400 hover:underline cursor-pointer"
-                    >
-                      {hasCopiedPairing ? (
-                        <>
-                          <Check size={12} className="text-emerald-500" />
-                          <span className="text-emerald-600 dark:text-emerald-400">Copied!</span>
-                        </>
-                      ) : (
-                        <>
-                          <Copy size={12} />
-                          <span>Copy Code</span>
-                        </>
-                      )}
-                    </button>
-                  </div>
-
-                  <div className="p-2.5 bg-slate-50 dark:bg-slate-800/80 rounded-lg text-[11px] font-mono break-all text-slate-800 dark:text-slate-200 select-all border border-slate-200 dark:border-slate-700">
-                    {pairingToken}
-                  </div>
-
-                  <p className="text-[11px] text-slate-500 dark:text-slate-400">
-                    <strong>Instructions:</strong> Open TrackWise from your iPhone Home Screen, tap <strong>"iPhone Home Screen App? Pair with Safari"</strong> on the sign-in screen, and paste this code.
-                  </p>
-                </div>
               )}
             </div>
           </div>

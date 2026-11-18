@@ -9,10 +9,6 @@ import {
   Loader2,
   X,
   Smartphone,
-  Key,
-  Check,
-  ChevronDown,
-  ChevronUp,
 } from 'lucide-react';
 import { useGoogleAuth } from '../../context/GoogleAuthContext';
 
@@ -23,30 +19,20 @@ export const LoginPortal: React.FC = () => {
     isAuthenticating,
     authError,
     clearAuthError,
-    pairWithToken,
   } = useGoogleAuth();
 
-  const [showPairingSection, setShowPairingSection] = useState(false);
-  const [pairingInput, setPairingInput] = useState('');
-  const [isPairing, setIsPairing] = useState(false);
-  const [pairingError, setPairingError] = useState<string | null>(null);
+  const [showIosTip, setShowIosTip] = useState<boolean>(() => {
+    if (typeof window === 'undefined') return false;
+    const isIos = /iphone|ipad|ipod/i.test(window.navigator.userAgent);
+    const isStandalone = (window.navigator as any).standalone === true;
+    return isIos && !isStandalone && !localStorage.getItem('trackwise_dismiss_ios_tip');
+  });
 
-  const handlePairSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!pairingInput.trim() || isPairing) return;
-
-    setIsPairing(true);
-    setPairingError(null);
+  const handleDismissIosTip = () => {
     try {
-      const result = await pairWithToken(pairingInput.trim());
-      if (!result.success) {
-        setPairingError(result.error || 'Pairing token verification failed. Please check the code.');
-      }
-    } catch (err: any) {
-      setPairingError(err.message || 'Failed to complete device pairing.');
-    } finally {
-      setIsPairing(false);
-    }
+      localStorage.setItem('trackwise_dismiss_ios_tip', 'true');
+    } catch {}
+    setShowIosTip(false);
   };
 
   return (
@@ -90,7 +76,7 @@ export const LoginPortal: React.FC = () => {
           </p>
 
           {/* Feature Highlights */}
-          <div className="space-y-2.5 mb-7 text-left">
+          <div className="space-y-2.5 mb-6 text-left">
             <div className="flex items-center gap-2.5 p-2.5 rounded-xl bg-slate-50/80 dark:bg-slate-800/50 border border-slate-100 dark:border-slate-800/80 text-xs">
               <div className="p-1.5 rounded-lg bg-emerald-100 dark:bg-emerald-950/60 text-emerald-600 dark:text-emerald-400 flex-shrink-0">
                 <FileSpreadsheet size={15} />
@@ -122,6 +108,29 @@ export const LoginPortal: React.FC = () => {
             </div>
           </div>
 
+          {/* Helpful iOS Safari Tip Banner (Subtle & Dismissible) */}
+          {showIosTip && (
+            <div className="mb-4 p-3 rounded-2xl bg-indigo-50/90 dark:bg-indigo-950/60 border border-indigo-200/80 dark:border-indigo-800/80 text-left flex items-start gap-2.5 animate-fade-in">
+              <div className="p-1.5 rounded-lg bg-indigo-600 text-white flex-shrink-0 mt-0.5">
+                <Smartphone size={13} />
+              </div>
+              <div className="flex-1 min-w-0">
+                <p className="text-xs font-bold text-indigo-950 dark:text-indigo-200">iPhone Tip: Add to Home Screen</p>
+                <p className="text-[11px] text-indigo-800/80 dark:text-indigo-300/80 leading-relaxed mt-0.5">
+                  Tap <strong>Share ➔ &quot;Add to Home Screen&quot;</strong> for the best app experience, and sign in directly inside the installed app!
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={handleDismissIosTip}
+                className="text-indigo-400 hover:text-indigo-700 dark:hover:text-indigo-200 p-0.5 transition flex-shrink-0 cursor-pointer"
+                aria-label="Dismiss tip"
+              >
+                <X size={14} />
+              </button>
+            </div>
+          )}
+
           {/* Inline Error Message */}
           {authError && (
             <div className="mb-4 p-3 rounded-xl bg-rose-50 dark:bg-rose-950/50 border border-rose-200 dark:border-rose-800/70 text-left flex items-start gap-2.5 animate-fade-in">
@@ -132,7 +141,7 @@ export const LoginPortal: React.FC = () => {
               <button
                 type="button"
                 onClick={clearAuthError}
-                className="text-rose-400 hover:text-rose-600 dark:hover:text-rose-200 transition flex-shrink-0"
+                className="text-rose-400 hover:text-rose-600 dark:hover:text-rose-200 transition flex-shrink-0 cursor-pointer"
                 aria-label="Dismiss error"
               >
                 <X size={14} />
@@ -178,73 +187,6 @@ export const LoginPortal: React.FC = () => {
                 </>
               )}
             </button>
-
-            {/* iPhone Home Screen PWA Pairing Handoff */}
-            <div className="pt-1">
-              <button
-                type="button"
-                onClick={() => {
-                  setShowPairingSection(!showPairingSection);
-                  setPairingError(null);
-                }}
-                className="w-full py-2 px-3 text-xs font-semibold text-slate-500 hover:text-indigo-600 dark:text-slate-400 dark:hover:text-indigo-400 rounded-xl hover:bg-slate-100 dark:hover:bg-slate-800/60 transition flex items-center justify-center gap-1.5 cursor-pointer"
-              >
-                <Smartphone size={13} className="text-indigo-500" />
-                <span>iPhone Home Screen App? Pair with Safari</span>
-                {showPairingSection ? <ChevronUp size={12} /> : <ChevronDown size={12} />}
-              </button>
-
-              {showPairingSection && (
-                <div className="mt-2.5 p-3.5 rounded-2xl bg-slate-50 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700/80 text-left space-y-2.5 animate-fade-in">
-                  <div className="flex items-start gap-2">
-                    <div className="p-1.5 rounded-lg bg-indigo-100 dark:bg-indigo-950/60 text-indigo-600 dark:text-indigo-400 flex-shrink-0 mt-0.5">
-                      <Key size={13} />
-                    </div>
-                    <div>
-                      <p className="text-xs font-bold text-slate-800 dark:text-slate-200">Pair iOS Home Screen PWA</p>
-                      <p className="text-[11px] text-slate-400 dark:text-slate-500 leading-snug">
-                        iOS isolates Home Screen apps from Safari. Sign in on Safari first, tap <strong>Settings → iOS PWA Pairing</strong> to get a 2-minute code, then paste it below.
-                      </p>
-                    </div>
-                  </div>
-
-                  <form onSubmit={handlePairSubmit} className="space-y-2">
-                    <input
-                      type="text"
-                      value={pairingInput}
-                      onChange={(e) => setPairingInput(e.target.value)}
-                      placeholder="Paste encrypted pairing code..."
-                      className="w-full px-3 py-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white rounded-xl text-xs font-mono outline-none focus:border-indigo-500"
-                      disabled={isPairing}
-                    />
-
-                    {pairingError && (
-                      <p className="text-[11px] text-rose-600 dark:text-rose-400 font-medium">
-                        {pairingError}
-                      </p>
-                    )}
-
-                    <button
-                      type="submit"
-                      disabled={isPairing || !pairingInput.trim()}
-                      className="w-full py-2 px-3 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white rounded-xl text-xs font-bold transition flex items-center justify-center gap-1.5 shadow-sm cursor-pointer"
-                    >
-                      {isPairing ? (
-                        <>
-                          <Loader2 size={13} className="animate-spin" />
-                          <span>Pairing Container...</span>
-                        </>
-                      ) : (
-                        <>
-                          <Check size={13} />
-                          <span>Pair & Sign In</span>
-                        </>
-                      )}
-                    </button>
-                  </form>
-                </div>
-              )}
-            </div>
 
             {/* Secondary Action: Continue Offline */}
             <button

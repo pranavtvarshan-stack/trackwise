@@ -209,8 +209,6 @@ interface GoogleAuthContextType {
   setCustomClientId: (id: string) => void;
   reconnectSync: () => void;
   getValidAccessToken: () => Promise<string | null>;
-  exportPairingToken: () => Promise<string>;
-  pairWithToken: (token: string) => Promise<{ success: boolean; error?: string }>;
   performSync: (
     transactions: Transaction[],
     budgets: Budget[],
@@ -535,71 +533,6 @@ export const GoogleAuthProvider: React.FC<{ children: React.ReactNode }> = ({ ch
   }, []);
 
   /**
-   * Stateless Encrypted iOS PWA Pairing: Export pairing token from Safari
-   */
-  const exportPairingToken = useCallback(async (): Promise<string> => {
-    const res = await fetch('/api/auth/handoff', {
-      method: 'GET',
-      credentials: 'include',
-    });
-    const data = await res.json();
-    if (!res.ok || data.error) {
-      throw new Error(data.error || 'Failed to generate iOS PWA pairing token');
-    }
-    return data.pairingToken;
-  }, []);
-
-  /**
-   * Stateless Encrypted iOS PWA Pairing: Import pairing token inside installed PWA
-   */
-  const pairWithToken = useCallback(
-    async (pairingToken: string): Promise<{ success: boolean; error?: string }> => {
-      try {
-        const res = await fetch('/api/auth/handoff', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          credentials: 'include',
-          body: JSON.stringify({ pairingToken }),
-        });
-        const data = await res.json();
-        if (!res.ok || data.error) {
-          return { success: false, error: data.error || 'Pairing token verification failed' };
-        }
-
-        const freshToken = await getValidAccessToken();
-        if (freshToken) {
-          const profile = await fetchGoogleUserInfo(freshToken);
-          setUser(profile);
-          localStorage.setItem(AUTH_STORAGE_KEYS.USER, JSON.stringify(profile));
-          setIsOfflineMode(false);
-          localStorage.setItem(AUTH_STORAGE_KEYS.OFFLINE_MODE, 'false');
-
-          try {
-            setSyncInfo((prev) => ({ ...prev, syncState: 'syncing', errorMessage: undefined }));
-            const sheet = await findOrCreateTrackWiseSheet(freshToken);
-            setSyncInfo((prev) => ({
-              ...prev,
-              spreadsheetId: sheet.spreadsheetId,
-              spreadsheetUrl: sheet.spreadsheetUrl,
-              syncState: 'idle',
-            }));
-            localStorage.setItem(AUTH_STORAGE_KEYS.SHEET_ID, sheet.spreadsheetId);
-            localStorage.setItem(AUTH_STORAGE_KEYS.SHEET_URL, sheet.spreadsheetUrl);
-          } catch (sheetErr) {
-            console.warn('[TrackWise Pairing] Failed to auto-discover sheet:', sheetErr);
-          }
-
-          return { success: true };
-        }
-        return { success: true };
-      } catch (err: any) {
-        return { success: false, error: err.message || 'Pairing request failed' };
-      }
-    },
-    [getValidAccessToken]
-  );
-
-  /**
    * Execute mutex-protected Live-Index Incremental Sync cycle
    */
   const performSync = useCallback(
@@ -750,8 +683,6 @@ export const GoogleAuthProvider: React.FC<{ children: React.ReactNode }> = ({ ch
         setCustomClientId,
         reconnectSync,
         getValidAccessToken,
-        exportPairingToken,
-        pairWithToken,
         performSync,
         pullFromSheet,
       }}

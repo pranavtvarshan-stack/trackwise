@@ -23,7 +23,7 @@
 3. **Automated Multi-Sheet Spreadsheet Architecture**: Syncs with Google Sheets via a structured 6-sheet schema (`Transactions`, `UPI Expenses`, `Cash Expenses`, `Budgets`, `Accounts`, `Recurring Bills`) allowing users to execute external analysis, pivot tables, or backups directly in Google Sheets.
 4. **Direct Redirect Flow with PKCE S256 & CSRF Protection**: Uses Google's official OAuth 2.0 Authorization Code Flow (`response_type=code`) with PKCE (`code_challenge` / `code_verifier` S256) and CSRF `state` verification stored in `localStorage` with a 10-minute expiry—eliminating popup blockers, COOP (`Cross-Origin-Opener-Policy`) conflicts, and third-party cookie failures across desktop and mobile devices.
 5. **XSS-Proof HttpOnly Cookies & Silent Token Refresh**: Refresh tokens are stored strictly inside an `HttpOnly; Secure; SameSite=Lax; Path=/api/auth` cookie (never accessible to JavaScript), auto-refreshed via `/api/auth/refresh` without hourly reconnect banners.
-6. **Stateless Encrypted Safari → iOS PWA Pairing Handoff**: Because iOS isolates Home Screen PWAs into separate sandboxes from Safari, an encrypted AES-256-GCM handoff (`/api/auth/handoff`) pairs installed PWAs within a 2-minute window without requiring in-memory server state.
+6. **Native iOS 16.4+ & Android PWA Direct Redirect Support**: Standalone Home Screen PWAs handle top-level OAuth navigation natively through in-app authentication sheets, persisting HttpOnly cookies and IndexedDB state directly inside the installed container without manual pairing codes.
 7. **Live-Index Incremental Sync Engine**: Maps actual row positions dynamically from remote `values:batchGet` calls rather than caching static row indexes. Uses `values:batchUpdate` for modified rows, `values:append` for new entries, and executes zero remote writes if nothing changed.
 8. **Asynchronous IndexedDB Storage with Account Isolation**: Namespaces local financial collections per user email (falling back to `guest` in offline mode) with `navigator.storage.persist()` to protect against Safari eviction.
 
@@ -213,12 +213,11 @@ flowchart TD
    - The returned `refresh_token` is saved in an **`HttpOnly; Secure; SameSite=Lax; Path=/api/auth`** cookie (max-age 180 days) rather than being exposed to browser JavaScript.
    - The ephemeral `access_token` is returned to the client and silently refreshed via `/api/auth/refresh` whenever `Date.now() >= expiresAt - 60000`, removing hourly reconnect banners entirely.
 
-3. **Stateless Encrypted Safari → iOS PWA Pairing Handoff**:
-   - Because iOS Safari isolates standalone Home Screen PWAs into separate sandboxes that do not share cookies or storage with Safari, users can pair their installed PWA seamlessly:
-     - In Safari, the user taps **"Generate Pairing Code"** in Settings.
-     - `GET /api/auth/handoff` reads the Safari HttpOnly refresh cookie and encrypts `{ refresh_token, exp: Date.now() + 120000 }` using Node crypto **AES-256-GCM** keyed by `GOOGLE_CLIENT_SECRET`.
-     - In the installed Home Screen PWA, the user taps **"iPhone Home Screen App? Pair with Safari"** and submits the pairing code.
-     - `POST /api/auth/handoff` verifies AES-256-GCM integrity, checks the 2-minute expiration, and sets the HttpOnly refresh cookie directly inside the iOS PWA container.
+3. **Native iOS 16.4+ & Android PWA Authentication Architecture**:
+   - Modern iOS (iOS 16.4+) and Android standalone Home Screen PWAs execute top-level redirects (`window.location.assign`) seamlessly inside native in-app authentication sheets.
+   - Upon redirect completion, `HttpOnly` refresh cookies and local storage tokens are stored directly inside the isolated standalone container.
+   - Tapping **"Sign in with Google"** works natively out-of-the-box across installed PWAs without requiring manual pairing codes or secondary devices.
+   - For users browsing in Safari before installing, a subtle dismissible tip advises installing to the Home Screen and logging in directly for the best fullscreen experience.
 
 4. **Live-Index Incremental Sync Engine & Mutex Web Locks**:
    - Every sync (`performSync`) acquires a cross-tab mutex via the browser **Web Locks API** (`navigator.locks.request('trackwise_sheets_sync', ...)`).

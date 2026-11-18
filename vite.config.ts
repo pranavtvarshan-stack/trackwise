@@ -31,10 +31,6 @@ export default defineConfig(({ mode }) => {
                 const { default: handler } = await server.ssrLoadModule('/api/auth/logout.ts');
                 return handler(req, res);
               }
-              if (urlPath === '/api/auth/handoff') {
-                const { default: handler } = await server.ssrLoadModule('/api/auth/handoff.ts');
-                return handler(req, res);
-              }
               next();
             } catch (err) {
               console.error('[Vite Dev API] Error executing handler:', err);
