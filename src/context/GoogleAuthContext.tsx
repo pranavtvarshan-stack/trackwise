@@ -101,9 +101,31 @@ export const GoogleAuthProvider: React.FC<{ children: React.ReactNode }> = ({ ch
         client_id: effectiveClientId,
         scope: 'openid email profile https://www.googleapis.com/auth/drive.file https://www.googleapis.com/auth/spreadsheets',
         error_callback: (nonOAuthError: any) => {
-          console.error('Google Token Client non-OAuth error:', nonOAuthError);
-          const msg = nonOAuthError?.message || nonOAuthError?.type || 'Failed to open Google Sign-In popup.';
-          alert(`Google Sign-In Error: ${msg}\n\nTip: Please verify popups are allowed and your current URL is added to Authorized JavaScript Origins in Google Cloud Console.`);
+          console.error('Google Token Client non-OAuth error:', JSON.stringify(nonOAuthError));
+          const type = nonOAuthError?.type || '';
+          const msg = nonOAuthError?.message || type || 'Unknown error';
+
+          if (type === 'popup_failed_to_open') {
+            alert(
+              `Google Sign-In popup was BLOCKED by your browser.\n\n` +
+              `Fix:\n` +
+              `1. Look for a blocked popup icon in your browser's address bar (top right of URL bar)\n` +
+              `2. Click it and select "Always allow popups from ${window.location.hostname}"\n` +
+              `3. Try signing in again.\n\n` +
+              `Or: Check that https://${window.location.hostname} is listed in Authorized JavaScript Origins in Google Cloud Console.`
+            );
+          } else if (type === 'popup_closed_by_user') {
+            // User closed it voluntarily — silent
+          } else {
+            alert(
+              `Google Sign-In Error (${type || 'unknown'}): ${msg}\n\n` +
+              `Possible causes:\n` +
+              `1. This domain (${window.location.hostname}) is not in Authorized JavaScript Origins\n` +
+              `2. Browser popup blocker\n` +
+              `3. Google API not enabled\n\n` +
+              `Check the browser console (F12 → Console) for more detail.`
+            );
+          }
         },
         callback: async (tokenResponse: any) => {
           if (tokenResponse.error) {
