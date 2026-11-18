@@ -60,8 +60,9 @@ export default async function handler(req: any, res: any) {
     const refreshToken = cookies[REFRESH_COOKIE_NAME];
 
     if (!refreshToken) {
-      return sendJson(res, 401, {
-        error: 'No active session or refresh token found. Please sign in again.',
+      return sendJson(res, 200, {
+        authenticated: false,
+        message: 'No active session or refresh token found.',
       });
     }
 
