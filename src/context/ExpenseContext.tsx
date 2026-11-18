@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useEffect, useMemo } from 'react';
+import React, { createContext, useContext, useState, useEffect, useMemo, useRef } from 'react';
 import { 
   Transaction, 
   Category, 
@@ -12,15 +12,10 @@ import {
 } from '../types';
 import { 
   getStoredTransactions, 
-  saveTransactions,
   getStoredCategories, 
-  saveCategories,
   getStoredPaymentMethods,
-  savePaymentMethods,
   getStoredBudgets, 
-  saveBudgets,
   getStoredRecurring, 
-  saveRecurring,
   getStoredSettings, 
   saveSettings,
   resetAllDataToDefault,
@@ -29,6 +24,21 @@ import {
   exportFullReportAsCSV,
   exportTransactionsAsCSV
 } from '../utils/storage';
+import {
+  loadTransactions,
+  saveTransactionsIDB,
+  loadBudgets,
+  saveBudgetsIDB,
+  loadRecurring,
+  saveRecurringIDB,
+  loadCategories,
+  saveCategoriesIDB,
+  loadPaymentMethods,
+  savePaymentMethodsIDB,
+  migrateFromLocalStorageIfPresent,
+  initializeEmptyUserDataset,
+} from '../utils/idbStorage';
+import { useGoogleAuth } from './GoogleAuthContext';
 import { 
   startOfMonth, 
   endOfMonth, 
@@ -201,27 +211,101 @@ export const ExpenseProvider: React.FC<{ children: React.ReactNode }> = ({ child
     });
   };
 
-  // Sync full state (including soft-delete tombstones) to localStorage whenever state changes
+  const { user } = useGoogleAuth();
+  const currentNamespace = user?.email || 'guest';
+  const [isIDBReady, setIsIDBReady] = useState(false);
+  const activeNamespaceRef = useRef(currentNamespace);
+  activeNamespaceRef.current = currentNamespace;
+
+  // Asynchronously load and isolate data per user email / guest in IndexedDB
   useEffect(() => {
-    saveTransactions(rawTransactions);
-  }, [rawTransactions]);
+    let isCurrent = true;
+    setIsIDBReady(false);
+
+    const initUserData = async () => {
+      try {
+        // Step 1: Migrate any legacy localStorage records seamlessly
+        await migrateFromLocalStorageIfPresent(currentNamespace);
+
+        // Step 2: Load primary collections from IndexedDB
+        const [loadedTx, loadedBudgets, loadedRec, loadedCats, loadedPM] = await Promise.all([
+          loadTransactions(currentNamespace),
+          loadBudgets(currentNamespace),
+          loadRecurring(currentNamespace),
+          loadCategories(currentNamespace),
+          loadPaymentMethods(currentNamespace),
+        ]);
+
+        if (!isCurrent) return;
+
+        // If dataset is completely empty and uninitialized for this namespace
+        if (loadedTx.length === 0 && loadedBudgets.length === 0 && loadedRec.length === 0) {
+          const initKey = `trackwise_init_${currentNamespace}`;
+          if (!localStorage.getItem(initKey)) {
+            localStorage.setItem(initKey, 'true');
+            const seeded = await initializeEmptyUserDataset(currentNamespace);
+            if (!isCurrent) return;
+            setRawTransactions(seeded.transactions);
+            setRawBudgets(seeded.budgets);
+            setRawRecurring(seeded.recurring);
+            setCategories(seeded.categories);
+            setPaymentMethods(seeded.paymentMethods);
+            setIsIDBReady(true);
+            return;
+          }
+        }
+
+        setRawTransactions(loadedTx);
+        setRawBudgets(loadedBudgets);
+        setRawRecurring(loadedRec);
+        setCategories(loadedCats);
+        setPaymentMethods(loadedPM);
+        setIsIDBReady(true);
+      } catch (err) {
+        console.error('[TrackWise] Error loading IndexedDB for namespace:', currentNamespace, err);
+        setIsIDBReady(true);
+      }
+    };
+
+    initUserData();
+
+    return () => {
+      isCurrent = false;
+    };
+  }, [currentNamespace]);
+
+  // Asynchronously persist changes to IndexedDB isolated by user namespace
+  useEffect(() => {
+    if (isIDBReady) {
+      saveTransactionsIDB(rawTransactions, currentNamespace);
+    }
+  }, [rawTransactions, currentNamespace, isIDBReady]);
 
   useEffect(() => {
-    saveCategories(categories);
-  }, [categories]);
+    if (isIDBReady) {
+      saveCategoriesIDB(categories, currentNamespace);
+    }
+  }, [categories, currentNamespace, isIDBReady]);
 
   useEffect(() => {
-    savePaymentMethods(paymentMethods);
-  }, [paymentMethods]);
+    if (isIDBReady) {
+      savePaymentMethodsIDB(paymentMethods, currentNamespace);
+    }
+  }, [paymentMethods, currentNamespace, isIDBReady]);
 
   useEffect(() => {
-    saveBudgets(rawBudgets);
-  }, [rawBudgets]);
+    if (isIDBReady) {
+      saveBudgetsIDB(rawBudgets, currentNamespace);
+    }
+  }, [rawBudgets, currentNamespace, isIDBReady]);
 
   useEffect(() => {
-    saveRecurring(rawRecurring);
-  }, [rawRecurring]);
+    if (isIDBReady) {
+      saveRecurringIDB(rawRecurring, currentNamespace);
+    }
+  }, [rawRecurring, currentNamespace, isIDBReady]);
 
+  // Keep localStorage strictly for lightweight UI flags and user settings
   useEffect(() => {
     saveSettings(settings);
   }, [settings]);
@@ -713,15 +797,12 @@ export const ExpenseProvider: React.FC<{ children: React.ReactNode }> = ({ child
           isDeleted: Boolean(tx.isDeleted),
         }));
         setRawTransactions(normalized);
-        saveTransactions(normalized);
       }
       if (Array.isArray(data.categories)) {
         setCategories(data.categories);
-        saveCategories(data.categories);
       }
       if (Array.isArray(data.paymentMethods)) {
         setPaymentMethods(data.paymentMethods);
-        savePaymentMethods(data.paymentMethods);
       }
       if (Array.isArray(data.budgets)) {
         const normalized: Budget[] = data.budgets.map((b: Budget) => ({
@@ -731,7 +812,6 @@ export const ExpenseProvider: React.FC<{ children: React.ReactNode }> = ({ child
           isDeleted: Boolean(b.isDeleted),
         }));
         setRawBudgets(normalized);
-        saveBudgets(normalized);
       }
       if (Array.isArray(data.recurring)) {
         const normalized: RecurringTransaction[] = data.recurring.map((r: RecurringTransaction) => ({
@@ -742,7 +822,6 @@ export const ExpenseProvider: React.FC<{ children: React.ReactNode }> = ({ child
           isDeleted: Boolean(r.isDeleted),
         }));
         setRawRecurring(normalized);
-        saveRecurring(normalized);
       }
       if (data.settings) {
         setSettings(data.settings);

@@ -479,31 +479,37 @@ Structured for zero-configuration continuous deployment on [Vercel](https://verc
 ## 8. Current Status, Known Gaps & Next Steps
 
 ### 8.1 Completed Milestones
-- [x] Strictly typed React 18 + TypeScript financial state engine with LocalStorage persistence.
-- [x] Popup-free **Google OAuth 2.0 Direct Redirect Flow** with CSRF `state` verification, StrictMode-safe hash parsing, and automatic URL token scrubbing.
-- [x] Hardened **Multi-Device Pull-Before-Push Sync Engine**:
-  - Monotonic `rev` revision counters + `updatedAt` tie-breakers (immune to device clock drift).
-  - Soft-delete tombstones (`isDeleted: true`) preventing deleted rows from resurrecting across devices, with automatic 30-day tombstone pruning.
-  - Cross-tab **Web Locks API** mutex (`trackwise_sheets_sync`) with in-memory fallback lock.
-  - Throttled `visibilitychange` / `window.focus` sync (at most once every 15 seconds) and canonical fingerprint anti-loop protection.
-- [x] Dedicated 6-Sheet Google Spreadsheet synchronization (`Transactions`, `UPI Expenses`, `Cash Expenses`, `Budgets`, `Accounts`, `Recurring Bills`) with explicit `values:batchClear` trailing ghost-row cleanup and dynamic `=SUMIFS` formulas.
-- [x] Decimal-accurate UPI & Cash balances with non-overlapping vertically stacked pills and expandable detail cards across mobile and desktop.
-- [x] Resilient Google profile avatars (`referrerPolicy="no-referrer"` + `onError` initial-badge fallback).
-- [x] Service Worker v3 (`trackwise-v3`) with network-first HTML delivery, Google domain bypass, and safe response cloning.
-- [x] Clean data wipe propagation (soft-deletes active rows + `trackwise_is_initialized_v1` guard).
+- [x] **XSS-Proof OAuth Authorization Code Flow (HttpOnly Refresh Cookie)**:
+  - Backend serverless routes (`/api/auth/exchange`, `/api/auth/refresh`, `/api/auth/logout`) with 180-day HttpOnly cookie token storage.
+  - Silent background token refresh (`getValidAccessToken()`) within 60 seconds of expiration, completely eliminating the hourly reconnect banner.
+  - Dynamically loaded Google Identity Services (`initCodeClient`) with popup authorization and restricted `openid email profile https://www.googleapis.com/auth/drive.file` scope.
+- [x] **Stateless Encrypted iOS PWA Pairing Handoff**:
+  - Zero-serverless-memory handoff endpoint (`/api/auth/handoff`) using Node.js `crypto` AES-256-GCM keyed by `GOOGLE_CLIENT_SECRET` with 2-minute time-to-live (`exp > Date.now()`).
+  - Seamless pairing between Safari browser sessions and standalone iOS PWA containers.
+- [x] **Asynchronous IndexedDB Storage + Persistence Lock + Account Isolation**:
+  - High-performance asynchronous storage layer (`idbStorage.ts`) powered by `idb` with per-user account isolation namespaced by user email (`guest` offline fallback).
+  - Browser storage persistence locked via `navigator.storage.persist()` on app initialization.
+  - Seamless zero-data-loss migration from legacy `localStorage` on initial startup; `localStorage` strictly reserved for lightweight UI flags (`trackwise_theme`, `trackwise_offline_mode`, `trackwise_is_initialized_v1`).
+- [x] **Live-Index Incremental Sync Engine (No Stale Row Caching)**:
+  - Dynamically builds live row index maps (`Map<id, actualSheetRowNumber>`) from pulled `values:batchGet` responses.
+  - Granular diff engine: updates modified rows via single-row `values:batchUpdate`, appends new rows via `values:append`, and completely skips all write calls when `!remoteChanged`.
+  - Automatic 30-day tombstone purge with clean `values:batchClear` full rewrite strictly reserved for initial setup or tombstone pruning.
+  - Dynamic `=SUMIFS` formulas and wallet balances refreshed atomically in `UPI Expenses`, `Cash Expenses`, and `Accounts`.
+- [x] **PWA Optimization & Service Worker v4**:
+  - `trackwise-v4` Service Worker with strict network-only bypass for all `/api/*` endpoints.
+  - Clean PNG icons (`icon-192.png`, `icon-512.png`, `apple-touch-icon.png`) declared with separate `any` and `maskable` purposes, preventing launcher icon corruption on Android and iOS.
+  - Removed static GIS script tag from `index.html`.
 
-### 8.2 Known Gaps & Technical Considerations
-1. **1-Hour OAuth Access Token Expiry (Implicit Flow Limitation)**:
-   - Client-side OAuth 2.0 implicit tokens expire after 3,600 seconds (1 hour) without refresh tokens (because refresh tokens require a backend client secret).
-   - *Current Behavior*: When expired, the app displays a non-intrusive **"Reconnect Sync"** banner while saving all changes locally; clicking it triggers a fast `login_hint` redirect to refresh the token.
-   - *Future Option*: Migrate to Authorization Code Flow + PKCE with a lightweight serverless token-refresh endpoint (e.g. Vercel Edge Function) for indefinite background sessions.
-2. **Legacy GIS Script Tag in `index.html`**:
-   - `index.html` still includes `<script src="https://accounts.google.com/gsi/client" async defer></script>` from the previous popup implementation. It is harmless, but can be removed to eliminate one unnecessary third-party script download.
-3. **Google OAuth App Verification (Production Publishing)**:
-   - While the GCP OAuth Consent Screen remains in **Testing** mode, only manually listed Test Users can sign in. Publishing the app (or completing Google's sensitive-scope verification for `spreadsheets`/`drive.file`) is required for unrestricted public onboarding.
+### 8.2 Production Deployment & Credentials Checklist
+1. **Google Cloud Console OAuth 2.0 Credentials**:
+   - In Google Cloud Console under **APIs & Services > Credentials > OAuth 2.0 Client IDs**:
+     - **Authorized JavaScript origins**: `http://localhost:5173` (for local development) and `https://<your-vercel-domain>.vercel.app` (for production).
+     - **Authorized redirect URIs**: `http://localhost:5173` and `https://<your-vercel-domain>.vercel.app`.
+2. **Environment Variables**:
+   - `VITE_GOOGLE_CLIENT_ID`: Public Google OAuth 2.0 Web Client ID.
+   - `GOOGLE_CLIENT_SECRET`: Private client secret configured in `.env` (for local Vite dev) and in Vercel Project Settings → Environment Variables (for serverless token exchange and PWA pairing).
 
 ### 8.3 Recommended Next Steps & Roadmap
-- **Remove Unused GIS Script**: Clean up the unused `accounts.google.com/gsi/client` script tag in `index.html`.
 - **Multi-Currency & FX Conversion**: Support foreign currency transactions with automatic conversion to the user's base currency.
 - **Biometric App Lock (WebAuthn)**: Optional device PIN / fingerprint lock for enhanced local privacy on shared devices.
 - **Automated PDF Monthly Statements**: Export formatted monthly financial reports and tax-ready category summaries.

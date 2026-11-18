@@ -1,17 +1,19 @@
-// TrackWise Service Worker v3
-// KEY FIX: Never cache/serve HTML from cache — always fetch fresh so the
-// server's Cross-Origin-Opener-Policy header is delivered to the browser,
-// which is required for Google Identity Services (GIS) popup login to work.
-const CACHE_NAME = 'trackwise-v3';
+// TrackWise Service Worker v4
+// KEY UPGRADES:
+// 1. Strictly bypass service worker for all /api/* routes (network-only)
+// 2. Never cache/serve HTML from cache — always fetch fresh so headers are delivered
+// 3. Cache static assets (JS, CSS, icons) with stale-while-revalidate
+
+const CACHE_NAME = 'trackwise-v4';
 const STATIC_ASSETS = [
   '/manifest.json',
-  '/favicon.svg',
   '/icon-192.png',
   '/icon-512.png',
   '/apple-touch-icon.png',
+  '/favicon.svg',
 ];
 
-// Install: pre-cache only static non-HTML assets, then activate immediately
+// Install: pre-cache static assets, activate immediately
 self.addEventListener('install', (event) => {
   self.skipWaiting();
   event.waitUntil(
@@ -19,7 +21,7 @@ self.addEventListener('install', (event) => {
   );
 });
 
-// Activate: wipe ALL old caches (v1, v2…) and claim all open tabs at once
+// Activate: wipe ALL older caches (v1, v2, v3…) and claim tabs
 self.addEventListener('activate', (event) => {
   event.waitUntil(
     caches
@@ -38,9 +40,22 @@ self.addEventListener('fetch', (event) => {
   // Skip non-GET and non-http(s) (e.g. chrome-extension://)
   if (request.method !== 'GET' || !request.url.startsWith('http')) return;
 
+  let url;
+  try {
+    url = new URL(request.url);
+  } catch (_) {
+    return;
+  }
+
+  // ── API Routes: Strictly Network-Only ─────────────────────────────────────
+  // /api/auth/*, /api/auth/exchange, /api/auth/refresh, etc. MUST bypass cache
+  if (url.pathname.startsWith('/api/')) {
+    event.respondWith(fetch(request));
+    return;
+  }
+
   // ── Navigation (HTML pages) ──────────────────────────────────────────────
-  // ALWAYS go to the network so the COOP/COEP headers from Vite / Vercel are
-  // delivered fresh. Only fall back to a cached shell when truly offline.
+  // Always go to network so COOP/COEP headers are fresh; offline fallback
   if (request.mode === 'navigate') {
     event.respondWith(
       fetch(request).catch(() => caches.match('/index.html'))
@@ -49,33 +64,28 @@ self.addEventListener('fetch', (event) => {
   }
 
   // ── External / Google domains ────────────────────────────────────────────
-  // Never intercept: let the browser handle Google Auth, fonts, APIs directly.
-  try {
-    const { hostname } = new URL(request.url);
-    if (
-      hostname.includes('google') ||
-      hostname.includes('googleapis') ||
-      hostname.includes('gstatic') ||
-      hostname.includes('accounts')
-    ) {
-      return;
-    }
-  } catch (_) {
+  if (
+    url.hostname.includes('google') ||
+    url.hostname.includes('googleapis') ||
+    url.hostname.includes('gstatic') ||
+    url.hostname.includes('accounts')
+  ) {
     return;
   }
 
   // ── Static assets (JS / CSS / images) ───────────────────────────────────
-  // Cache-first with background revalidation (stale-while-revalidate).
+  // Cache-first with background revalidation (stale-while-revalidate)
   event.respondWith(
     caches.match(request).then((cached) => {
-      // Background update for next visit
-      const networkFetch = fetch(request).then((res) => {
-        if (res && res.status === 200 && (res.type === 'basic' || res.type === 'cors')) {
-          const toCache = res.clone(); // clone BEFORE consuming
-          caches.open(CACHE_NAME).then((c) => c.put(request, toCache));
-        }
-        return res;
-      }).catch(() => null);
+      const networkFetch = fetch(request)
+        .then((res) => {
+          if (res && res.status === 200 && (res.type === 'basic' || res.type === 'cors')) {
+            const toCache = res.clone();
+            caches.open(CACHE_NAME).then((c) => c.put(request, toCache));
+          }
+          return res;
+        })
+        .catch(() => null);
 
       return cached || networkFetch;
     })
