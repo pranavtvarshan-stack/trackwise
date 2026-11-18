@@ -55,7 +55,12 @@ export const Header: React.FC<HeaderProps> = ({ onOpenAddModal, onNavigateToTab,
   const [showExportMenu, setShowExportMenu] = useState(false);
   const [showUserMenu, setShowUserMenu] = useState(false);
   const [manualSyncing, setManualSyncing] = useState(false);
+  const [avatarError, setAvatarError] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  React.useEffect(() => {
+    setAvatarError(false);
+  }, [user?.picture]);
 
   // Check how many recurring bills are due today or overdue
   const today = new Date().toISOString().split('T')[0];
@@ -208,8 +213,14 @@ export const Header: React.FC<HeaderProps> = ({ onOpenAddModal, onNavigateToTab,
                     className="flex items-center gap-1.5 p-1 rounded-xl border border-slate-200/70 dark:border-slate-700/80 hover:border-slate-300 dark:hover:border-slate-600 transition bg-white/50 dark:bg-slate-800/50 shadow-2xs"
                     title={`${user.name} (${user.email})`}
                   >
-                    {user.picture ? (
-                      <img src={user.picture} alt={user.name} className="w-7 h-7 rounded-lg object-cover" />
+                    {user.picture && !avatarError ? (
+                      <img
+                        src={user.picture}
+                        alt={user.name}
+                        referrerPolicy="no-referrer"
+                        onError={() => setAvatarError(true)}
+                        className="w-7 h-7 rounded-lg object-cover"
+                      />
                     ) : (
                       <div className="w-7 h-7 rounded-lg bg-indigo-600 text-white font-bold text-xs flex items-center justify-center">
                         {user.name.charAt(0).toUpperCase()}

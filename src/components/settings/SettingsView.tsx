@@ -74,6 +74,11 @@ export const SettingsView: React.FC = () => {
 
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
+  const [avatarError, setAvatarError] = useState(false);
+
+  React.useEffect(() => {
+    setAvatarError(false);
+  }, [user?.picture]);
 
   // New Category Form State
   const [newCatName, setNewCatName] = useState('');
@@ -696,11 +701,17 @@ export const SettingsView: React.FC = () => {
           <div className="space-y-3">
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-3 rounded-xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200/70 dark:border-slate-700/70">
               <div className="flex items-center gap-3">
-                {user.picture ? (
-                  <img src={user.picture} alt={user.name} className="w-10 h-10 rounded-full object-cover" />
+                {user.picture && !avatarError ? (
+                  <img
+                    src={user.picture}
+                    alt={user.name}
+                    referrerPolicy="no-referrer"
+                    onError={() => setAvatarError(true)}
+                    className="w-10 h-10 rounded-full object-cover"
+                  />
                 ) : (
                   <div className="w-10 h-10 rounded-full bg-indigo-600 text-white font-bold flex items-center justify-center">
-                    {user.name.charAt(0)}
+                    {user.name.charAt(0).toUpperCase()}
                   </div>
                 )}
                 <div>

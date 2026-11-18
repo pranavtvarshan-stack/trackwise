@@ -1,5 +1,5 @@
-import React, { createContext, useContext, useState, useEffect, useCallback, useRef } from 'react';
-import { GoogleUser, GoogleSyncInfo, SyncState, Transaction, Budget, RecurringTransaction } from '../types';
+import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
+import { GoogleUser, GoogleSyncInfo, Transaction, Budget, RecurringTransaction } from '../types';
 import {
   fetchGoogleUserInfo,
   findOrCreateTrackWiseSheet,
@@ -16,13 +16,103 @@ const AUTH_STORAGE_KEYS = {
   SHEET_ID: 'trackwise_sheet_id',
   SHEET_URL: 'trackwise_sheet_url',
   LAST_SYNC: 'trackwise_last_sync',
+  OAUTH_STATE: 'trackwise_oauth_state',
 };
+
+const OAUTH_SCOPES =
+  'openid email profile https://www.googleapis.com/auth/drive.file https://www.googleapis.com/auth/spreadsheets';
+
+/**
+ * Parse OAuth 2.0 redirect callback from window.location.hash ONCE at module load.
+ * Running outside React effects prevents React 18 StrictMode double-mount from
+ * losing the access token after scrubbing the URL hash.
+ */
+interface OAuthRedirectResult {
+  accessToken: string | null;
+  expiresAt: number | null;
+  error: string | null;
+}
+
+function consumeOAuthRedirectHash(): OAuthRedirectResult {
+  if (typeof window === 'undefined' || !window.location.hash) {
+    return { accessToken: null, expiresAt: null, error: null };
+  }
+
+  const rawHash = window.location.hash.startsWith('#')
+    ? window.location.hash.slice(1)
+    : window.location.hash;
+
+  // Only handle hashes that look like an OAuth2 response
+  if (!rawHash.includes('access_token=') && !rawHash.includes('error=')) {
+    return { accessToken: null, expiresAt: null, error: null };
+  }
+
+  const params = new URLSearchParams(rawHash);
+  const accessToken = params.get('access_token');
+  const expiresInRaw = params.get('expires_in');
+  const returnedState = params.get('state');
+  const error = params.get('error');
+  const errorDescription = params.get('error_description');
+
+  // Always scrub sensitive OAuth parameters from the URL bar immediately
+  try {
+    window.history.replaceState(null, '', window.location.pathname + window.location.search);
+  } catch {
+    // Ignore history API restrictions
+  }
+
+  // Validate CSRF state if we saved one prior to redirecting
+  const savedState = sessionStorage.getItem(AUTH_STORAGE_KEYS.OAUTH_STATE);
+  sessionStorage.removeItem(AUTH_STORAGE_KEYS.OAUTH_STATE);
+
+  if (error) {
+    if (error === 'access_denied') {
+      return {
+        accessToken: null,
+        expiresAt: null,
+        error:
+          'Google Sign-In was cancelled or access was denied. If your OAuth app is in Testing mode, make sure your Gmail is added under Test Users in Google Cloud Console.',
+      };
+    }
+    return {
+      accessToken: null,
+      expiresAt: null,
+      error: errorDescription || error,
+    };
+  }
+
+  if (savedState && returnedState && savedState !== returnedState) {
+    return {
+      accessToken: null,
+      expiresAt: null,
+      error: 'OAuth security state mismatch. Please try signing in again.',
+    };
+  }
+
+  if (accessToken) {
+    const expiresIn = parseInt(expiresInRaw || '3600', 10) || 3600;
+    const expiresAt = Date.now() + expiresIn * 1000;
+
+    localStorage.setItem(AUTH_STORAGE_KEYS.TOKEN, accessToken);
+    localStorage.setItem(AUTH_STORAGE_KEYS.EXPIRES_AT, expiresAt.toString());
+    localStorage.setItem(AUTH_STORAGE_KEYS.OFFLINE_MODE, 'false');
+
+    return { accessToken, expiresAt, error: null };
+  }
+
+  return { accessToken: null, expiresAt: null, error: null };
+}
+
+const initialRedirectResult = consumeOAuthRedirectHash();
 
 interface GoogleAuthContextType {
   user: GoogleUser | null;
   accessToken: string | null;
   isTokenExpired: boolean;
   isOfflineMode: boolean;
+  isAuthenticating: boolean;
+  authError: string | null;
+  clearAuthError: () => void;
   syncInfo: GoogleSyncInfo;
   effectiveClientId: string;
   isConfigured: boolean;
@@ -45,12 +135,17 @@ interface GoogleAuthContextType {
 const GoogleAuthContext = createContext<GoogleAuthContextType | undefined>(undefined);
 
 export const GoogleAuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const envClientId = String((import.meta as any).env?.VITE_GOOGLE_CLIENT_ID || '').trim().replace(/^["']|["']$/g, '');
+  const envClientId = String((import.meta as any).env?.VITE_GOOGLE_CLIENT_ID || '')
+    .trim()
+    .replace(/^["']|["']$/g, '');
   const [customClientId, setCustomClientIdState] = useState<string>(() => {
-    return String(localStorage.getItem(AUTH_STORAGE_KEYS.CUSTOM_CLIENT_ID) || '').trim().replace(/^["']|["']$/g, '');
+    return String(localStorage.getItem(AUTH_STORAGE_KEYS.CUSTOM_CLIENT_ID) || '')
+      .trim()
+      .replace(/^["']|["']$/g, '');
   });
 
-  const effectiveClientId = customClientId || envClientId;
+  // Prioritize build-time VITE_GOOGLE_CLIENT_ID so stale localStorage overrides cannot break login
+  const effectiveClientId = envClientId || customClientId;
   const isConfigured = Boolean(effectiveClientId);
 
   const [user, setUser] = useState<GoogleUser | null>(() => {
@@ -63,17 +158,25 @@ export const GoogleAuthProvider: React.FC<{ children: React.ReactNode }> = ({ ch
   });
 
   const [accessToken, setAccessToken] = useState<string | null>(() => {
-    return localStorage.getItem(AUTH_STORAGE_KEYS.TOKEN) || null;
+    return initialRedirectResult.accessToken || localStorage.getItem(AUTH_STORAGE_KEYS.TOKEN) || null;
   });
 
   const [tokenExpiresAt, setTokenExpiresAt] = useState<number | null>(() => {
+    if (initialRedirectResult.expiresAt) return initialRedirectResult.expiresAt;
     const raw = localStorage.getItem(AUTH_STORAGE_KEYS.EXPIRES_AT);
     return raw ? parseInt(raw, 10) : null;
   });
 
   const [isOfflineMode, setIsOfflineMode] = useState<boolean>(() => {
+    if (initialRedirectResult.accessToken) return false;
     return localStorage.getItem(AUTH_STORAGE_KEYS.OFFLINE_MODE) === 'true';
   });
+
+  const [isAuthenticating, setIsAuthenticating] = useState<boolean>(() => {
+    return Boolean(initialRedirectResult.accessToken);
+  });
+
+  const [authError, setAuthError] = useState<string | null>(() => initialRedirectResult.error);
 
   const [syncInfo, setSyncInfo] = useState<GoogleSyncInfo>(() => {
     return {
@@ -89,190 +192,155 @@ export const GoogleAuthProvider: React.FC<{ children: React.ReactNode }> = ({ ch
     accessToken && tokenExpiresAt && Date.now() > tokenExpiresAt - 60000 // 1 minute buffer
   );
 
-  const tokenClientRef = useRef<any>(null);
-
-  const initGoogleTokenClient = useCallback(() => {
-    if (typeof window === 'undefined' || !window.google?.accounts?.oauth2 || !effectiveClientId) {
-      return null;
-    }
-
-    try {
-      const client = window.google.accounts.oauth2.initTokenClient({
-        client_id: effectiveClientId,
-        scope: 'openid email profile https://www.googleapis.com/auth/drive.file https://www.googleapis.com/auth/spreadsheets',
-        error_callback: (nonOAuthError: any) => {
-          console.error('Google Token Client non-OAuth error:', JSON.stringify(nonOAuthError));
-          const type = nonOAuthError?.type || '';
-          const msg = nonOAuthError?.message || type || 'Unknown error';
-
-          if (type === 'popup_failed_to_open') {
-            alert(
-              `Google Sign-In popup was BLOCKED by your browser.\n\n` +
-              `Fix:\n` +
-              `1. Look for a blocked popup icon in your browser's address bar (top right of URL bar)\n` +
-              `2. Click it and select "Always allow popups from ${window.location.hostname}"\n` +
-              `3. Try signing in again.\n\n` +
-              `Or: Check that https://${window.location.hostname} is listed in Authorized JavaScript Origins in Google Cloud Console.`
-            );
-          } else if (type === 'popup_closed_by_user') {
-            // User closed it voluntarily — silent
-          } else {
-            alert(
-              `Google Sign-In Error (${type || 'unknown'}): ${msg}\n\n` +
-              `Possible causes:\n` +
-              `1. This domain (${window.location.hostname}) is not in Authorized JavaScript Origins\n` +
-              `2. Browser popup blocker\n` +
-              `3. Google API not enabled\n\n` +
-              `Check the browser console (F12 → Console) for more detail.`
-            );
-          }
-        },
-        callback: async (tokenResponse: any) => {
-          if (tokenResponse.error) {
-            console.error('Google Auth callback error:', tokenResponse);
-            const errorDesc = tokenResponse.error_description || tokenResponse.error;
-            setSyncInfo((prev) => ({
-              ...prev,
-              syncState: 'error',
-              errorMessage: errorDesc,
-            }));
-
-            if (tokenResponse.error !== 'popup_closed_by_user') {
-              if (tokenResponse.error === 'access_denied') {
-                alert(`Google Sign-In Blocked (access_denied):\n\nYour Google OAuth app is in "Testing" mode. Only Google accounts added to "Test users" in Google Cloud Console can sign in.\n\nPlease add your Gmail to Test Users in Google Cloud Console -> OAuth consent screen, or publish the app.`);
-              } else {
-                alert(`Google Sign-In Error: ${errorDesc}`);
-              }
-            }
-            return;
-          }
-
-          if (tokenResponse.access_token) {
-            const token = tokenResponse.access_token;
-            const expiresIn = parseInt(tokenResponse.expires_in, 10) || 3600;
-            const expiresAt = Date.now() + expiresIn * 1000;
-
-            setAccessToken(token);
-            setTokenExpiresAt(expiresAt);
-            localStorage.setItem(AUTH_STORAGE_KEYS.TOKEN, token);
-            localStorage.setItem(AUTH_STORAGE_KEYS.EXPIRES_AT, expiresAt.toString());
-            localStorage.setItem(AUTH_STORAGE_KEYS.OFFLINE_MODE, 'false');
-            setIsOfflineMode(false);
-
-            try {
-              const profile = await fetchGoogleUserInfo(token);
-              setUser(profile);
-              localStorage.setItem(AUTH_STORAGE_KEYS.USER, JSON.stringify(profile));
-
-              // Initial Sheet discovery & preparation
-              setSyncInfo((prev) => ({ ...prev, syncState: 'syncing' }));
-              const sheet = await findOrCreateTrackWiseSheet(token);
-              setSyncInfo((prev) => ({
-                ...prev,
-                spreadsheetId: sheet.spreadsheetId,
-                spreadsheetUrl: sheet.spreadsheetUrl,
-                syncState: 'idle',
-              }));
-              localStorage.setItem(AUTH_STORAGE_KEYS.SHEET_ID, sheet.spreadsheetId);
-              localStorage.setItem(AUTH_STORAGE_KEYS.SHEET_URL, sheet.spreadsheetUrl);
-            } catch (err: any) {
-              console.error('Post-login initialization error:', err);
-              setSyncInfo((prev) => ({
-                ...prev,
-                syncState: 'error',
-                errorMessage: err.message,
-              }));
-              alert(`Connected to Google, but failed to initialize Sheet: ${err.message}\n\nPlease check if Google Drive API and Google Sheets API are enabled in Google Cloud Console.`);
-            }
-          }
-        },
-      });
-      tokenClientRef.current = client;
-      return client;
-    } catch (err) {
-      console.warn('Failed to initialize Google Token Client:', err);
-      return null;
-    }
-  }, [effectiveClientId]);
-
-  // Keep checking until Google GSI script finishes loading
+  // Finish sign-in after returning from Google OAuth redirect (or when token exists without user profile)
   useEffect(() => {
-    if (!effectiveClientId) return;
-
-    if (window.google?.accounts?.oauth2) {
-      initGoogleTokenClient();
+    if (!accessToken || isTokenExpired) {
+      setIsAuthenticating(false);
       return;
     }
 
-    const interval = setInterval(() => {
-      if (window.google?.accounts?.oauth2) {
-        initGoogleTokenClient();
-        clearInterval(interval);
-      }
-    }, 200);
+    const needsAuthFinalize = Boolean(initialRedirectResult.accessToken) || !user;
+    if (!needsAuthFinalize) {
+      setIsAuthenticating(false);
+      return;
+    }
 
-    const timeout = setTimeout(() => {
-      clearInterval(interval);
-    }, 10000);
+    let cancelled = false;
+
+    const finalizeLogin = async () => {
+      if (!user) {
+        setIsAuthenticating(true);
+      }
+      setAuthError(null);
+      try {
+        const profile = await fetchGoogleUserInfo(accessToken);
+        if (cancelled) return;
+
+        setUser(profile);
+        localStorage.setItem(AUTH_STORAGE_KEYS.USER, JSON.stringify(profile));
+        setIsOfflineMode(false);
+        localStorage.setItem(AUTH_STORAGE_KEYS.OFFLINE_MODE, 'false');
+        setIsAuthenticating(false);
+
+        // Discover or create the user's TrackWise Google Sheet in background
+        setSyncInfo((prev) => ({ ...prev, syncState: 'syncing', errorMessage: undefined }));
+        const sheet = await findOrCreateTrackWiseSheet(accessToken);
+        if (cancelled) return;
+
+        setSyncInfo((prev) => ({
+          ...prev,
+          spreadsheetId: sheet.spreadsheetId,
+          spreadsheetUrl: sheet.spreadsheetUrl,
+          syncState: 'idle',
+        }));
+        localStorage.setItem(AUTH_STORAGE_KEYS.SHEET_ID, sheet.spreadsheetId);
+        localStorage.setItem(AUTH_STORAGE_KEYS.SHEET_URL, sheet.spreadsheetUrl);
+      } catch (err: any) {
+        if (cancelled) return;
+        console.error('Post-login initialization error:', err);
+        const message =
+          err?.message === 'TOKEN_EXPIRED'
+            ? 'Your Google session expired. Please sign in again.'
+            : err?.message || 'Failed to connect to Google Drive / Sheets.';
+        setAuthError(message);
+        setSyncInfo((prev) => ({
+          ...prev,
+          syncState: 'error',
+          errorMessage: message,
+        }));
+        setIsAuthenticating(false);
+      }
+    };
+
+    finalizeLogin();
 
     return () => {
-      clearInterval(interval);
-      clearTimeout(timeout);
+      cancelled = true;
     };
-  }, [effectiveClientId, initGoogleTokenClient]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [accessToken]);
+
+  /**
+   * Launch Google OAuth 2.0 Direct Redirect Flow.
+   * Uses a full-page redirect instead of a popup window so it works reliably
+   * across Opera, Chrome, Brave, Safari, Mobile browsers, and installed PWAs
+   * with zero COOP / window.closed / popup-blocker issues.
+   */
+  const startGoogleOAuthRedirect = useCallback(
+    (options?: { prompt?: string; loginHint?: string }) => {
+      if (!effectiveClientId) {
+        setAuthError('Google Client ID is not configured. Please check VITE_GOOGLE_CLIENT_ID.');
+        return;
+      }
+
+      const state =
+        typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function'
+          ? crypto.randomUUID()
+          : `${Date.now()}_${Math.random().toString(36).slice(2)}`;
+
+      sessionStorage.setItem(AUTH_STORAGE_KEYS.OAUTH_STATE, state);
+
+      const redirectUri = window.location.origin;
+      const params = new URLSearchParams({
+        client_id: effectiveClientId,
+        redirect_uri: redirectUri,
+        response_type: 'token',
+        scope: OAUTH_SCOPES,
+        include_granted_scopes: 'true',
+        state,
+      });
+
+      if (options?.prompt) {
+        params.set('prompt', options.prompt);
+      }
+      if (options?.loginHint) {
+        params.set('login_hint', options.loginHint);
+      }
+
+      window.location.assign(`https://accounts.google.com/o/oauth2/v2/auth?${params.toString()}`);
+    },
+    [effectiveClientId]
+  );
 
   const loginWithGoogle = useCallback(() => {
-    if (!effectiveClientId) {
-      alert('Google Client ID is not configured yet. Please enter a Client ID or use Offline Mode.');
-      return;
-    }
-
-    let client = tokenClientRef.current;
-    if (!client) {
-      client = initGoogleTokenClient();
-    }
-
-    if (client) {
-      client.requestAccessToken({ prompt: 'consent' });
-    } else {
-      alert('Google Sign-In is still loading. Please check your internet connection and try again.');
-    }
-  }, [effectiveClientId, initGoogleTokenClient]);
+    setAuthError(null);
+    startGoogleOAuthRedirect({ prompt: 'select_account consent' });
+  }, [startGoogleOAuthRedirect]);
 
   const reconnectSync = useCallback(() => {
-    let client = tokenClientRef.current;
-    if (!client) {
-      client = initGoogleTokenClient();
-    }
-
-    if (client) {
-      client.requestAccessToken({ prompt: '' });
-    } else {
-      loginWithGoogle();
-    }
-  }, [initGoogleTokenClient, loginWithGoogle]);
+    setAuthError(null);
+    startGoogleOAuthRedirect({ loginHint: user?.email });
+  }, [startGoogleOAuthRedirect, user?.email]);
 
   const logout = useCallback(() => {
-    if (accessToken && window.google?.accounts?.oauth2?.revoke) {
-      try {
-        window.google.accounts.oauth2.revoke(accessToken, () => {});
-      } catch (e) {
-        console.warn('Failed to revoke Google token:', e);
-      }
+    if (accessToken) {
+      // Best-effort token revocation via Google's REST endpoint
+      fetch(`https://oauth2.googleapis.com/revoke?token=${encodeURIComponent(accessToken)}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      }).catch(() => {});
     }
     setUser(null);
     setAccessToken(null);
     setTokenExpiresAt(null);
     setIsOfflineMode(false);
+    setAuthError(null);
     localStorage.removeItem(AUTH_STORAGE_KEYS.USER);
     localStorage.removeItem(AUTH_STORAGE_KEYS.TOKEN);
     localStorage.removeItem(AUTH_STORAGE_KEYS.EXPIRES_AT);
     localStorage.removeItem(AUTH_STORAGE_KEYS.OFFLINE_MODE);
+    localStorage.removeItem(AUTH_STORAGE_KEYS.SHEET_ID);
+    localStorage.removeItem(AUTH_STORAGE_KEYS.SHEET_URL);
   }, [accessToken]);
 
   const continueOffline = useCallback(() => {
     setIsOfflineMode(true);
+    setAuthError(null);
     localStorage.setItem(AUTH_STORAGE_KEYS.OFFLINE_MODE, 'true');
+  }, []);
+
+  const clearAuthError = useCallback(() => {
+    setAuthError(null);
   }, []);
 
   const setCustomClientId = useCallback((id: string) => {
@@ -413,6 +481,9 @@ export const GoogleAuthProvider: React.FC<{ children: React.ReactNode }> = ({ ch
         accessToken,
         isTokenExpired,
         isOfflineMode,
+        isAuthenticating,
+        authError,
+        clearAuthError,
         syncInfo,
         effectiveClientId,
         isConfigured,
@@ -437,4 +508,3 @@ export const useGoogleAuth = () => {
   }
   return context;
 };
-

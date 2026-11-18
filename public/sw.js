@@ -1,94 +1,83 @@
-// TrackWise Service Worker - Offline First Architecture
-const CACHE_NAME = 'trackwise-v1';
-const PRECACHE_URLS = [
-  '/',
-  '/index.html',
+// TrackWise Service Worker v3
+// KEY FIX: Never cache/serve HTML from cache — always fetch fresh so the
+// server's Cross-Origin-Opener-Policy header is delivered to the browser,
+// which is required for Google Identity Services (GIS) popup login to work.
+const CACHE_NAME = 'trackwise-v3';
+const STATIC_ASSETS = [
   '/manifest.json',
   '/favicon.svg',
   '/icon-192.png',
   '/icon-512.png',
-  '/apple-touch-icon.png'
+  '/apple-touch-icon.png',
 ];
 
-// Install: Cache initial core shell
+// Install: pre-cache only static non-HTML assets, then activate immediately
 self.addEventListener('install', (event) => {
   self.skipWaiting();
   event.waitUntil(
-    caches.open(CACHE_NAME).then((cache) => {
-      return cache.addAll(PRECACHE_URLS);
-    })
+    caches.open(CACHE_NAME).then((cache) => cache.addAll(STATIC_ASSETS))
   );
 });
 
-// Activate: Clean up any old caches and claim clients immediately
+// Activate: wipe ALL old caches (v1, v2…) and claim all open tabs at once
 self.addEventListener('activate', (event) => {
   event.waitUntil(
-    caches.keys().then((cacheNames) => {
-      return Promise.all(
-        cacheNames
-          .filter((name) => name !== CACHE_NAME)
-          .map((name) => caches.delete(name))
-      );
-    }).then(() => self.clients.claim())
+    caches
+      .keys()
+      .then((keys) =>
+        Promise.all(keys.filter((k) => k !== CACHE_NAME).map((k) => caches.delete(k)))
+      )
+      .then(() => self.clients.claim())
   );
 });
 
-// Fetch: Serve from cache, fallback to network, cache new assets dynamically
+// Fetch handler
 self.addEventListener('fetch', (event) => {
-  const request = event.request;
+  const { request } = event;
 
-  // Ignore non-GET requests and non-http(s) schemes (e.g., chrome-extension)
-  if (request.method !== 'GET' || !request.url.startsWith('http')) {
-    return;
-  }
+  // Skip non-GET and non-http(s) (e.g. chrome-extension://)
+  if (request.method !== 'GET' || !request.url.startsWith('http')) return;
 
-  // Handle SPA navigation: if offline, return cached index.html
+  // ── Navigation (HTML pages) ──────────────────────────────────────────────
+  // ALWAYS go to the network so the COOP/COEP headers from Vite / Vercel are
+  // delivered fresh. Only fall back to a cached shell when truly offline.
   if (request.mode === 'navigate') {
     event.respondWith(
-      fetch(request).catch(() => {
-        return caches.match('/index.html') || caches.match('/');
-      })
+      fetch(request).catch(() => caches.match('/index.html'))
     );
     return;
   }
 
-  // Assets (JS, CSS, Fonts, Images) Strategy: Cache First, fallback to Network
+  // ── External / Google domains ────────────────────────────────────────────
+  // Never intercept: let the browser handle Google Auth, fonts, APIs directly.
+  try {
+    const { hostname } = new URL(request.url);
+    if (
+      hostname.includes('google') ||
+      hostname.includes('googleapis') ||
+      hostname.includes('gstatic') ||
+      hostname.includes('accounts')
+    ) {
+      return;
+    }
+  } catch (_) {
+    return;
+  }
+
+  // ── Static assets (JS / CSS / images) ───────────────────────────────────
+  // Cache-first with background revalidation (stale-while-revalidate).
   event.respondWith(
-    caches.match(request).then((cachedResponse) => {
-      if (cachedResponse) {
-        // Fetch in background to update cache for next time (Stale-while-revalidate for local assets)
-        fetch(request)
-          .then((networkResponse) => {
-            if (networkResponse && networkResponse.status === 200) {
-              const responseToCache = networkResponse.clone();
-              caches.open(CACHE_NAME).then((cache) => {
-                cache.put(request, responseToCache);
-              });
-            }
-          })
-          .catch(() => {
-            // Silently ignore background refresh errors when offline
-          });
-        return cachedResponse;
-      }
-
-      // If not in cache, fetch from network and store in cache
-      return fetch(request).then((networkResponse) => {
-        if (!networkResponse || networkResponse.status !== 200 || networkResponse.type !== 'basic' && networkResponse.type !== 'cors') {
-          return networkResponse;
+    caches.match(request).then((cached) => {
+      // Background update for next visit
+      const networkFetch = fetch(request).then((res) => {
+        if (res && res.status === 200 && (res.type === 'basic' || res.type === 'cors')) {
+          const toCache = res.clone(); // clone BEFORE consuming
+          caches.open(CACHE_NAME).then((c) => c.put(request, toCache));
         }
+        return res;
+      }).catch(() => null);
 
-        const responseToCache = networkResponse.clone();
-        caches.open(CACHE_NAME).then((cache) => {
-          cache.put(request, responseToCache);
-        });
-
-        return networkResponse;
-      }).catch(() => {
-        // If image fails offline, we can provide fallback or nothing
-        return new Response('Offline content unavailable', { status: 503, statusText: 'Offline' });
-      });
+      return cached || networkFetch;
     })
   );
 });
-

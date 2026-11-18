@@ -15,13 +15,14 @@
 ### 1.2 Target Users & Market Positioning
 - **Digital & Cash Transactors**: Users in hybrid cash/digital economies (specifically UPI users in India) who need transparent split tracking between virtual and physical wallets without rounding errors.
 - **Privacy-Conscious Individuals**: Users who refuse to transmit sensitive financial ledgers, salary slips, and bank account credentials to proprietary fintech backends.
-- **Cross-Device Mobile & Desktop Users**: Users requiring a lightweight, installable PWA that functions seamlessly on low-bandwidth connections, transitions into full offline mode, and synchronizes transparently when connected.
+- **Cross-Device Mobile & Desktop Users**: Users requiring a lightweight, installable PWA that functions seamlessly across desktop browsers (Chrome, Opera, Edge, Brave, Safari), mobile browsers, and standalone PWA installations with resilient offline support.
 
 ### 1.3 Core Value Proposition
 1. **True Data Ownership**: The application has no proprietary database backend. Data resides directly in the browser's persistent storage and synchronizes bidirectionally to a private spreadsheet on the user's personal Google Drive account.
 2. **Instant Zero-Latency UI**: All ledger queries, analytics, category filters, and budget recalculations execute client-side in sub-millisecond timeframes.
 3. **Automated Multi-Sheet Spreadsheet Architecture**: Syncs with Google Sheets via a structured 6-sheet schema (`Transactions`, `UPI Expenses`, `Cash Expenses`, `Budgets`, `Accounts`, `Recurring Bills`) allowing users to execute external analysis, pivot tables, or backups directly in Google Sheets.
-4. **Resilient Offline Capabilities**: Operates offline via Service Worker caching and local storage fallback, queuing pending changes until network and token availability are restored.
+4. **Popup-Free Cross-Browser Authentication**: Uses Google's official OAuth 2.0 Direct Redirect Flow (`response_type=token`) with CSRF `state` verification—eliminating popup blockers, COOP (`Cross-Origin-Opener-Policy`) conflicts, and third-party cookie failures across Opera, Brave, Safari, and installed PWAs.
+5. **Resilient Offline Capabilities**: Operates offline via Service Worker v3 (`trackwise-v3`) asset caching and local storage fallback, syncing automatically when network connectivity and OAuth session validity are restored.
 
 ---
 
@@ -33,16 +34,17 @@ TrackWise Pro is constructed using a high-performance, strictly typed modern web
 | Component | Technology | Version | Purpose |
 | :--- | :--- | :--- | :--- |
 | **Runtime & Bundler** | [Vite](https://vitejs.dev/) | `^6.0.3` | High-speed ESM dev server and optimized Rollup production bundler |
-| **UI Framework** | [React](https://react.dev/) | `^18.3.1` | Component-driven declarative UI engine |
+| **UI Framework** | [React](https://react.dev/) | `^18.3.1` | Component-driven declarative UI engine (StrictMode enabled) |
 | **DOM Renderer** | React DOM | `^18.3.1` | Browser DOM rendering layer |
-| **Language** | [TypeScript](https://www.typescriptlang.org/) | `~5.6.2` | Static typing, interface contracts, and compile-time correctness |
+| **Language** | [TypeScript](https://www.typescriptlang.org/) | `^5.6.3` | Static typing, interface contracts, and compile-time correctness |
+| **Vite React Plugin** | `@vitejs/plugin-react` | `^4.3.4` | Fast Refresh and JSX compilation |
 
 ### 2.2 Styling & Presentation
 | Package | Version | Purpose |
 | :--- | :--- | :--- |
-| **CSS Framework** | [Tailwind CSS](https://tailwindcss.com/) | `^3.4.16` | Utility-first, mobile-responsive dark theme design system |
+| **CSS Framework** | [Tailwind CSS](https://tailwindcss.com/) | `^3.4.16` | Utility-first, mobile-responsive light/dark theme design system |
 | **CSS Post-Processor** | [PostCSS](https://postcss.org/) | `^8.4.49` | Modern CSS transformation pipeline |
-| **CSS Vendor Prefixer**| [Autoprefixer](https://github.com/postcss/autoprefixer) | `^10.4.20` | Cross-browser CSS ruleset optimization |
+| **CSS Vendor Prefixer** | [Autoprefixer](https://github.com/postcss/autoprefixer) | `^10.4.20` | Cross-browser CSS ruleset optimization |
 | **Class Merger** | [tailwind-merge](https://github.com/dcastil/tailwind-merge) | `^2.5.5` | Dynamic Tailwind class deduplication and conflict resolution |
 | **Utility Helper** | [clsx](https://github.com/lukeed/clsx) | `^2.1.1` | Conditional class composition engine |
 
@@ -55,12 +57,14 @@ TrackWise Pro is constructed using a high-performance, strictly typed modern web
 | **Micro-Interactions** | [canvas-confetti](https://github.com/catdad/canvas-confetti) | `^1.9.4` | Canvas-based celebratory particle FX for budget/goal milestones |
 
 ### 2.4 Cloud & External APIs
-| Service / SDK | Version / Endpoint | Purpose |
+| Service / Endpoint | Version / URL | Purpose |
 | :--- | :--- | :--- |
-| **Google Identity Services (GIS)** | `https://accounts.google.com/gsi/client` | OAuth2 implicit authorization token client |
-| **Google Drive API** | `v3` | Spreadsheet file discovery, metadata validation, and automatic workbook creation |
-| **Google Sheets API** | `v4` | Atomic `batchUpdate`, range metadata inspection, and cell value reading/writing |
-| **Web Service Worker** | Cache API / Service Worker v1 | Asset caching, offline navigation fallback, and PWA installation |
+| **Google OAuth 2.0 Endpoint** | `https://accounts.google.com/o/oauth2/v2/auth` | Direct full-page redirect implicit authorization (`response_type=token`) |
+| **Google Token Revocation** | `https://oauth2.googleapis.com/revoke` | Best-effort REST token revocation on sign-out |
+| **Google UserInfo API** | `https://www.googleapis.com/oauth2/v3/userinfo` | Authenticated Google user profile & avatar retrieval |
+| **Google Drive API** | `v3` | Spreadsheet file discovery, metadata validation, and workbook lookup |
+| **Google Sheets API** | `v4` | Workbook creation, `ensureSheetsExist`, `values:batchGet`, and atomic `values:batchUpdate` |
+| **Web Service Worker** | Cache API (`trackwise-v3`) | Static asset caching (stale-while-revalidate), network-first HTML navigation, and Google domain bypass |
 
 ---
 
@@ -73,16 +77,15 @@ c:\Users\kitch\OneDrive\Documents\Expense Tracker\
 ├── .env                              # Local environment variables (VITE_GOOGLE_CLIENT_ID)
 ├── .env.example                      # Documented template for environment setup
 ├── .gitignore                        # Git exclusion rules (node_modules, dist, .env)
-├── index.html                        # HTML5 single-page application entry point
+├── index.html                        # HTML5 SPA entry point, zero-flash theme script, splash screen
 ├── package.json                      # Dependency manifests, scripts, and build configuration
 ├── package-lock.json                 # Pinned dependency lockfile
 ├── postcss.config.js                 # PostCSS plugin registration (Tailwind, Autoprefixer)
+├── PROJECT_DOCS.md                   # Complete Project Build & Architecture Document
 ├── README.md                         # Project introduction and quick-start instructions
 ├── tailwind.config.js                # Design tokens, color palette, animations, and container specs
-├── tsconfig.json                     # TypeScript compiler options and path configurations
-├── tsconfig.app.json                 # Client application TypeScript rules
-├── tsconfig.node.json                # Node/Vite build tooling TypeScript rules
-├── vite.config.ts                    # Vite compilation config, code splitting, manual chunk specs
+├── tsconfig.json                     # TypeScript compiler options and strictness rules
+├── vite.config.ts                    # Vite dev server (port 5173) & Rollup manual chunk splitting
 │
 ├── public/                           # Static production assets
 │   ├── apple-touch-icon.png          # iOS home screen web-clip icon
@@ -90,29 +93,29 @@ c:\Users\kitch\OneDrive\Documents\Expense Tracker\
 │   ├── icon-192.png                  # Standard 192x192 PWA launcher icon
 │   ├── icon-512.png                  # High-density 512x512 PWA splash icon
 │   ├── manifest.json                 # Web App Manifest (PWA installation metadata)
-│   └── sw.js                         # Production Service Worker for offline asset caching
+│   └── sw.js                         # Service Worker v3 (network-first HTML, Google API bypass, asset cache)
 │
 └── src/                              # Application source tree
-    ├── App.tsx                       # Master root orchestrator (Tab routing, cloud-pull init, debounce sync)
+    ├── App.tsx                       # Master root orchestrator (Tab routing, startup cloud pull, 1.5s debounce sync)
     ├── index.css                     # Global Tailwind directives, scrollbar rules, custom utilities
-    ├── main.tsx                      # DOM mount point, context provider wrapping, SW registration
+    ├── main.tsx                      # React 18 StrictMode DOM mount point, ErrorBoundary & SW registration
     ├── registerServiceWorker.ts      # Service Worker lifecycle registration helper
     │
     ├── components/                   # Modular UI presentation and domain components
     │   ├── analytics/
     │   │   └── AnalyticsReports.tsx  # Advanced trends, category distributions, spending radar, bar charts
     │   ├── auth/
-    │   │   └── LoginPortal.tsx       # Standalone Google sign-in modal/portal
+    │   │   └── LoginPortal.tsx       # Entry login gate with loading spinner, inline OAuth error banner & offline mode
     │   ├── budgets/
     │   │   └── BudgetManager.tsx     # Monthly budget limits, progress indicators, alert thresholds
     │   ├── common/
     │   │   ├── CategoryIcon.tsx      # Dynamic category icon resolver with fallback glyphs
     │   │   └── ErrorBoundary.tsx     # React component crash boundary with recovery UI
     │   ├── dashboard/
-    │   │   └── OverviewDashboard.tsx # Executive finance view (Expandable cards, charts, recent transactions)
+    │   │   └── OverviewDashboard.tsx # Executive finance view (Expandable cards, stacked UPI/Cash pills, charts)
     │   ├── layout/
-    │   │   ├── Header.tsx            # Top application bar (Search, cloud sync badge, user profile)
-    │   │   └── Navbar.tsx            # Desktop sidebar / Mobile bottom sticky tab navigation
+    │   │   ├── Header.tsx            # Top bar (Currency pill, cloud sync status, no-referrer avatar + fallback, menu)
+    │   │   └── Navbar.tsx            # Desktop navigation tabs / Mobile bottom sticky navigation bar
     │   ├── modals/
     │   │   ├── BudgetModal.tsx       # Create/edit budget allocation modal
     │   │   ├── CsvImportModal.tsx    # Drag-and-drop CSV parser and bulk transaction importer
@@ -122,117 +125,124 @@ c:\Users\kitch\OneDrive\Documents\Expense Tracker\
     │   ├── recurring/
     │   │   └── RecurringManager.tsx  # Recurring bills & subscription manager (Frequencies, due tracking)
     │   ├── settings/
-    │   │   └── SettingsView.tsx      # System preferences, Google OAuth setup, seed reset, cloud backup
+    │   │   └── SettingsView.tsx      # Categories, payment methods, Google Drive status, JSON/CSV backup & wipe
     │   └── transactions/
     │       └── TransactionList.tsx   # Paginated, filterable, multi-sort transaction ledger
     │
     ├── constants/
-    │   └── defaults.ts               # Default categories, icons, colors, and initial seed datasets
+    │   └── defaults.ts               # Default categories, payment methods, icons, colors, and initial seed datasets
     │
     ├── context/
-    │   ├── ExpenseContext.tsx        # Central financial state machine (Transactions, balances, filters)
-    │   └── GoogleAuthContext.tsx     # Google Identity Services, token life cycle, Drive & Sheets sync
+    │   ├── ExpenseContext.tsx        # Central financial state machine (Transactions, exact balances, filters)
+    │   └── GoogleAuthContext.tsx     # OAuth 2.0 Direct Redirect auth, CSRF state check, token expiry, Drive/Sheets sync
     │
     ├── services/
-    │   └── googleSheetsService.ts    # REST client for Google Drive v3 & Google Sheets v4 API
+    │   └── googleSheetsService.ts    # REST client for Google Drive v3 & Google Sheets v4 API (6-sheet engine)
     │
     ├── types/
     │   └── index.ts                  # Canonical TypeScript interfaces, type unions, and API contracts
     │
     └── utils/
-        ├── formatters.ts             # Currency (INR), date string parsers, payment method normalizers
-        └── storage.ts                # Namespaced LocalStorage persistence, seed loaders, CSV encoders
+        ├── formatters.ts             # Currency (INR, decimal-accurate), date parsers, payment method normalizers
+        └── storage.ts                # Namespaced LocalStorage persistence, seed guards, CSV/JSON encoders
 ```
 
 ---
 
 ## 4. System Architecture & Data Flow
 
-TrackWise Pro utilizes a **Local-First, Dual-Tier Storage Architecture**. User actions commit instantaneously to local state and LocalStorage, while an asynchronous synchronization engine debounces and pushes updates to Google Sheets in the background.
+TrackWise Pro utilizes a **Local-First, Dual-Tier Storage Architecture** paired with a **Popup-Free OAuth 2.0 Direct Redirect Flow**. User actions commit instantaneously to local state and `localStorage`, while an asynchronous synchronization engine debounces and pushes updates to Google Sheets in the background.
 
 ### 4.1 High-Level Architecture Diagram
 
 ```mermaid
 flowchart TD
-    User([User Device / Browser]) -->|User Interaction| ReactApp[TrackWise Pro React Application]
+    User([User Device / Browser / PWA]) -->|User Interaction| ReactApp[TrackWise Pro React Application]
     
     subgraph ClientLayer [Client Execution Context]
         ReactApp --> StateEngine[ExpenseContext State Machine]
-        StateEngine --> Calculation[Financial Engine: Balances & Stats]
-        StateEngine -->|Synchronous Instant Write| LocalStore[(Browser LocalStorage\ntrackwise_*_v1)]
+        StateEngine --> Calculation[Financial Engine: Exact Balances & Stats]
+        StateEngine -->|Synchronous Instant Write| LocalStore[(Browser LocalStorage\ntrackwise_*)]
         
-        SW[Service Worker sw.js] -.->|Caches Shell & Assets| ReactApp
+        SW[Service Worker sw.js v3] -.->|Caches Static Assets Only\nNetwork-First HTML & Google Bypass| ReactApp
     end
 
-    subgraph SyncEngine [Background Sync & Auth Engine]
+    subgraph SyncEngine [Background Sync & Redirect Auth Engine]
         ReactApp --> AuthContext[GoogleAuthContext]
-        AuthContext --> GIS[Google Identity Services SDK]
+        AuthContext -->|Full-Page Redirect + CSRF State| OAuthEndpoint[Google OAuth 2.0\n/o/oauth2/v2/auth]
+        OAuthEndpoint -->|Redirect #access_token Hash| HashParser[Module-Level Hash Consumer\nScrubs URL via replaceState]
+        HashParser --> AuthContext
         StateEngine -.->|1.5s Debounced Trigger| SyncDispatch[Auto-Sync Controller]
         SyncDispatch --> GoogleSheetsClient[googleSheetsService.ts]
     end
 
     subgraph GoogleCloud [Google Cloud Platform Services]
-        GIS -->|OAuth2 Token Request| GoogleAuthServer[Google OAuth2 Identity Provider]
-        GoogleAuthServer -->|Access Token| GIS
-        
-        GoogleSheetsClient -->|Drive API v3: Find or Create| DriveAPI[Google Drive REST API]
-        GoogleSheetsClient -->|Sheets API v4: batchGet & batchUpdate| SheetsAPI[Google Sheets REST API]
+        AuthContext -->|Profile Lookup| UserInfoAPI[Google UserInfo v3 API]
+        GoogleSheetsClient -->|Drive API v3: Find Spreadsheet| DriveAPI[Google Drive REST API]
+        GoogleSheetsClient -->|Sheets API v4: Create, batchGet, batchUpdate| SheetsAPI[Google Sheets REST API]
         DriveAPI --> TargetSheet[TrackWise Pro Spreadsheet\n6 Managed Sheets]
         SheetsAPI --> TargetSheet
     end
 ```
 
-### 4.2 End-to-End Data Synchronization Lifecycle
+### 4.2 End-to-End Authentication & Data Synchronization Lifecycle
 
-1. **Authentication Handshake**:
-   - The user triggers Google Sign-In in `GoogleAuthContext.tsx`.
-   - Google Identity Services (`initTokenClient`) launches a popup requesting scopes `spreadsheets`, `drive.file`, `userinfo.email`, and `userinfo.profile`.
-   - The received OAuth2 token is stored in memory alongside an expiry timestamp (`Date.now() + expiresIn * 1000`).
+1. **OAuth 2.0 Direct Redirect Handshake (Popup-Free)**:
+   - When the user clicks **"Sign in with Google"** or **"Sign in to Backup"**, `GoogleAuthContext.tsx` generates a cryptographically random CSRF `state` nonce (stored in `sessionStorage` under `trackwise_oauth_state`) and redirects the current browser tab to `https://accounts.google.com/o/oauth2/v2/auth` with:
+     - `response_type=token`
+     - `redirect_uri=window.location.origin` (no trailing slash)
+     - `scope=openid email profile https://www.googleapis.com/auth/drive.file https://www.googleapis.com/auth/spreadsheets`
+     - `prompt=select_account consent` (or `login_hint=user.email` during `reconnectSync()`).
+   - Because authentication happens in the full browser tab rather than a cross-origin popup, it completely avoids COOP (`Cross-Origin-Opener-Policy`), `window.closed` polling errors, popup blockers, and Opera/Brave/Safari cross-window restrictions.
 
-2. **Spreadsheet Discovery & Provisioning**:
-   - On the first cloud interaction, `googleSheetsService.findOrCreateSpreadsheet()` queries Google Drive API v3: `name = 'TrackWise Pro - Personal Finance' and mimeType = 'application/vnd.google-apps.spreadsheet' and trashed = false`.
-   - If not found, a new spreadsheet is created with 6 sheets.
-   - If found, `ensureSheetsExist()` inspects existing sheet titles and automatically provisions any missing sheets (such as `'Recurring Bills'`) via `AddSheetRequest`.
+2. **StrictMode-Safe Hash Consumption & URL Scrubbing**:
+   - When Google redirects back to `${origin}/#state=...&access_token=...&expires_in=3599`, `consumeOAuthRedirectHash()` runs **once at module load** before React mounts—preventing React 18 `<StrictMode>` double-mounts from dropping the token.
+   - It validates the CSRF `state`, persists `trackwise_google_token` and `trackwise_google_expires_at` to `localStorage`, clears `trackwise_offline_mode`, and immediately removes the token from the URL bar using `window.history.replaceState`.
+   - `GoogleAuthProvider`'s effect (keyed on `[accessToken]`) fetches the Google profile via `fetchGoogleUserInfo()`, unlocks the Dashboard immediately, and resolves/creates the spreadsheet in the background.
 
-3. **Cloud Pull (Download)**:
-   - On application startup or manual "Pull from Cloud", `pullFromGoogleSheets()` executes a single `batchGet` query across:
-     - `'Transactions'!A2:K`
-     - `'Budgets'!A2:H`
-     - `'Recurring Bills'!A2:K`
-   - Notice: Space-containing sheet names are wrapped in single quotes and URL-encoded (`encodeURIComponent("'Recurring Bills'!A2:K")`) to guarantee RFC-compliant HTTP execution.
-   - Rows are mapped back into strongly typed TypeScript models. If the cloud workbook contains valid data, local state is populated and cached to `localStorage`.
+3. **Spreadsheet Discovery & Automatic Schema Upgrade**:
+   - `findOrCreateTrackWiseSheet()` queries Google Drive API v3 for `name='TrackWise Pro - Personal Finance' and mimeType='application/vnd.google-apps.spreadsheet' and trashed=false`.
+   - If absent, it creates the 6-tab workbook via Sheets API v4.
+   - If present, `ensureSheetsExist()` inspects existing tab titles and automatically adds any missing tabs (e.g., `'Recurring Bills'`) via `addSheet`.
 
-4. **Optimistic Local Update & Debounced Push**:
-   - Any transaction mutation (`addTransaction`, `editTransaction`, `deleteTransaction`) immediately modifies React state and persists to `localStorage`.
-   - `App.tsx` monitors state revision timestamps and debounces synchronization by **1,500ms** to prevent API quota exhaustion during rapid multi-item entries.
-   - `pushToGoogleSheets()` bundles:
-     - Full transaction ledger into `'Transactions'!A1:K`
-     - Computed UPI expense rows into `'UPI Expenses'!A1:G`
-     - Computed Cash expense rows into `'Cash Expenses'!A1:G`
-     - Active budget allocations into `'Budgets'!A1:H`
-     - Real-time balances and timestamps into `'Accounts'!A1:D`
-     - Subscriptions & bills into `'Recurring Bills'!A1:K`
-   - The payload is dispatched via an atomic `values:batchUpdate` HTTP `POST` using `USER_ENTERED` value input option.
+4. **Cloud Pull (Cross-Device / Cross-Domain Restore)**:
+   - On login or when opening on a new domain/device, `App.tsx` tracks `initialPullAttemptedRef` and blocks auto-push (`isInitialPullDone`) until cloud data is checked first—preventing an empty local state from overwriting cloud records.
+   - `pullDataFromSheet()` executes a single `values:batchGet` request with URL-encoded sheet ranges (`encodeURIComponent("'Recurring Bills'!A2:K")`) to fetch `Transactions`, `Budgets`, and `Recurring Bills`, merging any missing cloud entries into local state.
+
+5. **Optimistic Local Update & Debounced Push**:
+   - Mutations immediately update React state and `localStorage`.
+   - `App.tsx` debounces cloud pushes by **1,500ms** (`performSync`), bundling all 6 tabs (including row-1 headers to avoid empty `values: []` Protobuf 400 errors) into a single atomic `values:batchUpdate` (`USER_ENTERED`).
 
 ---
 
 ## 5. Database Schema & Data Models
 
-### 5.1 Local Storage Namespaces (`localStorage`)
+### 5.1 Browser Storage Keys (`localStorage` & `sessionStorage`)
 
-All persistent client keys are version-prefixed (`_v1`) to prevent collision with third-party web apps or legacy versions:
+#### Financial & App State Keys (`src/utils/storage.ts` & `index.html`)
+| Storage | Key Name | Type | Description |
+| :--- | :--- | :--- | :--- |
+| `localStorage` | `trackwise_transactions_v1` | `Transaction[]` | Complete array of historical income and expense transactions |
+| `localStorage` | `trackwise_categories_v1` | `Category[]` | Custom and default category definitions with icons and colors |
+| `localStorage` | `trackwise_payment_methods_v1` | `PaymentMethodItem[]` | Configured payment methods (UPI, Cash, Credit Card, Bank, etc.) |
+| `localStorage` | `trackwise_budgets_v1` | `Budget[]` | Category budget caps, period definitions, and alert triggers |
+| `localStorage` | `trackwise_recurring_v1` | `RecurringTransaction[]` | Configured subscriptions, bills, frequencies, and due dates |
+| `localStorage` | `trackwise_settings_v1` | `UserSettings` | Currency formatting, notifications, and app preferences |
+| `localStorage` | `trackwise_is_initialized_v1` | `'true'` | Guard flag preventing demo data from re-seeding after user wipes data |
+| `localStorage` | `trackwise_theme` | `'dark' \| 'light'` | Persisted theme preference read before React mounts for zero-flash rendering |
 
-| Key Name | Type | Description |
-| :--- | :--- | :--- |
-| `trackwise_transactions_v1` | `Transaction[]` | Complete array of historical income and expense transactions |
-| `trackwise_categories_v1` | `Category[]` | Custom and default category definitions with icons and colors |
-| `trackwise_budgets_v1` | `Budget[]` | Category budget caps, period definitions, and alert triggers |
-| `trackwise_recurring_v1` | `RecurringTransaction[]`| Configured subscriptions, bills, and frequencies |
-| `trackwise_payment_methods_v1` | `PaymentMethodItem[]` | Enabled payment methods (UPI, Cash, Credit Card, Bank, etc.) |
-| `trackwise_settings_v1` | `UserSettings` | User UI preferences, default currency, and sync parameters |
-| `trackwise_google_sync_v1` | `GoogleSyncInfo` | Cloud spreadsheet ID, URL, last sync date, and sync status |
-| `trackwise_custom_client_id_v1`| `string` | User-overridden Google Cloud OAuth Client ID |
-| `trackwise_data_cleared_v1` | `boolean` | Flag preventing automatic re-seeding after explicit data wipe |
+#### Authentication & Cloud Sync Keys (`src/context/GoogleAuthContext.tsx`)
+| Storage | Key Name | Type | Description |
+| :--- | :--- | :--- | :--- |
+| `localStorage` | `trackwise_google_user` | `GoogleUser` (JSON) | Cached Google user profile (`id`, `name`, `email`, `picture`) |
+| `localStorage` | `trackwise_google_token` | `string` | Active OAuth 2.0 Bearer access token |
+| `localStorage` | `trackwise_google_expires_at` | `string` (epoch ms) | Access token expiration timestamp (checked with 60s safety buffer) |
+| `localStorage` | `trackwise_offline_mode` | `'true' \| 'false'` | Tracks whether user bypassed login into local-only offline mode |
+| `localStorage` | `trackwise_sheet_id` | `string` | Linked Google Spreadsheet ID |
+| `localStorage` | `trackwise_sheet_url` | `string` | Direct Google Sheets browser URL |
+| `localStorage` | `trackwise_last_sync` | `string` (ISO 8601) | Timestamp of last completed cloud pull/push |
+| `localStorage` | `trackwise_custom_client_id` | `string` | Legacy fallback Client ID (only used if `VITE_GOOGLE_CLIENT_ID` is empty) |
+| `sessionStorage` | `trackwise_oauth_state` | `string` | Short-lived CSRF nonce validated on OAuth redirect callback |
 
 ### 5.2 Google Sheets 6-Tab Workbook Schema
 
@@ -247,7 +257,7 @@ The application creates and maintains a dedicated Google Sheets workbook entitle
 | **C** | Title | `string` | Transaction description (e.g., "Grocery Shopping") |
 | **D** | Type | `string` | `expense` \| `income` |
 | **E** | Category | `string` | Category ID (e.g., `cat_groceries`) |
-| **F** | Amount | `number` | Transaction monetary value with exact decimal precision (`450.50`) |
+| **F** | Amount | `number` | Monetary value with full decimal precision (`450.50`) |
 | **G** | Payment Method | `string` | `UPI` \| `Cash` \| `Credit Card` \| `Debit Card` \| `Net Banking` |
 | **H** | Notes | `string` | Optional descriptive context |
 | **I** | Tags | `string` | Comma-separated tags (e.g., `"food, weekend"`) |
@@ -307,75 +317,74 @@ The application creates and maintains a dedicated Google Sheets workbook entitle
 ## 6. Core Features & Implementation Details
 
 ### 6.1 Executive Dashboard (`src/components/dashboard/OverviewDashboard.tsx`)
-- **Expandable Metrics Cards**: 
-  - *Net Savings Card*: Displays current net savings and percentage savings rate. Features an internal vertical layout showing UPI and Cash balances with full decimal accuracy (avoiding text overlap on small mobile screens). Cards expand on click in mobile view to reveal detailed breakdown matrices.
-  - *Total Income Card*: Displays aggregated period income; expands on click to reveal an itemized list of every contributing income stream.
-  - *Total Expenses Card*: Displays aggregated period expenses; expands to display a full itemized list of expenditures.
-  - *Top Category Card*: Identifies the highest spending category with visual icon indicators; expands to display all transactions attributed to that specific category.
-- **Dynamic Cash Flow Chart**: Recharts `AreaChart` rendering income versus expenses across monthly or weekly buckets.
-- **Category Spend Distribution**: Recharts `PieChart` / `DonutChart` showing proportional category breakdown with percentage tags.
-- **Recent Activity Ledger**: Quick-access listing of recent entries with inline edit/delete actions.
+- **Expandable Metrics Cards (Mobile & Desktop)**:
+  - *Net Savings Card*: Displays net savings, savings rate, and vertically stacked **UPI** and **Cash** balance pills with exact decimal precision (`tabular-nums`, zero rounding, zero horizontal text overlap on compact mobile screens). Expandable on mobile to inspect wallet breakdowns.
+  - *Total Income Card*: Displays aggregated period income; expands on click in both mobile and desktop views to show an itemized breakdown of every income source.
+  - *Total Expenses Card*: Displays aggregated period expenses; expands on click to list every expense item.
+  - *Top Category Card*: Highlights the highest spending category; expands on click to show all expenses in that category.
+- **Dynamic Cash Flow Chart**: Recharts `AreaChart` rendering income versus expenses across periods.
+- **Category Spend Distribution**: Recharts `PieChart` / `DonutChart` displaying proportional spend breakdown.
+- **Recent Activity Ledger**: Quick-access list of recent transactions with inline edit/delete controls.
 
 ### 6.2 Transaction Management (`src/components/transactions/TransactionList.tsx` & `TransactionModal.tsx`)
-- **Advanced Filtering Engine**: Filter across search keywords, transaction types (`all`, `income`, `expense`), custom category selections, payment methods, and date ranges (7 days, 30 days, this month, custom interval).
-- **Multi-Field Sorting**: Sort by date, amount, title, or category in ascending or descending direction.
-- **Pagination & Batch Processing**: Configurable page sizes (10, 25, 50 items) with instant page transitions.
-- **Decimal-Accurate Monetary Input**: Input handlers preserve floating-point currency numbers without premature integer truncation or rounding.
-- **Tagging & Note Storage**: Supports structured metadata tags and unstructured notes per transaction.
+- **Advanced Filtering Engine**: Filter across search keywords, transaction types (`all`, `income`, `expense`), categories, payment methods, and date ranges.
+- **Multi-Field Sorting & Pagination**: Sort by date, amount, title, or category; paginate large ledgers smoothly.
+- **Decimal-Accurate Monetary Input**: Preserves exact paise/cents across input, storage, dashboard cards, and Google Sheets sync.
+- **Tagging & Notes**: Structured metadata tags and notes per transaction.
 
 ### 6.3 Budgeting & Financial Guardrails (`src/components/budgets/BudgetManager.tsx` & `BudgetModal.tsx`)
-- **Dynamic Progress Meters**: Visual progress bars color-coded by utilization:
-  - `< 70%`: Emerald Green (Safe)
-  - `70% - 90%`: Amber Yellow (Caution / Threshold Approaching)
-  - `> 90%`: Rose Red (Critical / Over-Budget)
-- **Visual Alert Banners**: Displays warning badges when expenses exceed custom alert thresholds.
-- **Celebratory Milestone Trigger**: Integrated `canvas-confetti` bursts when a user completes a budget period under their spending ceiling.
+- **Dynamic Progress Meters**: Color-coded utilization bars (`< 70%` Emerald, `70%–90%` Amber, `> 90%` Rose).
+- **Threshold Alerts & Milestones**: Visual warning badges when spending approaches ceilings, plus `canvas-confetti` celebration feedback.
 
 ### 6.4 Recurring Bills & Subscriptions (`src/components/recurring/RecurringManager.tsx` & `RecurringModal.tsx`)
-- **Frequency Scheduling**: Supports `weekly`, `monthly`, `quarterly`, and `yearly` recurrences.
-- **Due Date Countdown**: Highlights upcoming bills, overdue payments, and days remaining until renewal.
-- **One-Click Bill Settlement**: Converts a recurring bill instance into a live transaction entry with automatic due-date advancement.
-- **Cloud Synchronization**: Backed by the dedicated `'Recurring Bills'` sheet in Google Sheets.
+- **Frequency Scheduling**: Supports `weekly`, `monthly`, `quarterly`, and `yearly` recurrences with due-date countdowns and header overdue badges.
+- **One-Click Settlement**: Logs a recurring bill directly as a transaction and advances `nextDueDate`.
+- **Full Cloud Sync**: Syncs bidirectionally with the dedicated `'Recurring Bills'` Google Sheet tab across devices.
 
 ### 6.5 Financial Analytics & Reporting (`src/components/analytics/AnalyticsReports.tsx`)
-- **Income vs. Expense Trend Analysis**: Multi-month comparative bar charts.
-- **Category Radar Chart**: Multi-axis spending profile across lifestyle, bills, food, transport, and utilities.
-- **Monthly Savings Rate Progression**: Trendline monitoring personal financial retention over time.
-- **Spending Velocity**: Tracks average daily burn rate across the active billing cycle.
+- **Income vs. Expense Comparison**: Multi-month bar charts and cash flow visualizations.
+- **Category Radar & Savings Rate Trends**: Spending profile breakdown and monthly retention tracking.
 
-### 6.6 Data Portability, Import & Export (`src/components/modals/CsvImportModal.tsx` & `ExportModal.tsx`)
-- **CSV Import Engine**: Client-side drag-and-drop CSV parser with automatic column header detection (`Date`, `Title`, `Amount`, `Type`, `Category`, `Payment Method`).
-- **Data Export Formats**: Instant client-side generation and download of formatted `.csv` and structured `.json` data archives.
+### 6.6 Header, Navigation & Resilient Avatars (`src/components/layout/Header.tsx` & `Navbar.tsx`)
+- **Cloud Sync Status Pill**: Displays live states (`Synced`, `Syncing...`, `Reconnect` on token expiry, or `Sign in to Backup` in offline mode).
+- **Resilient Google Profile Avatars**: Renders user photos with `referrerPolicy="no-referrer"` (preventing Google CDN `403` blocks) and automatic `onError` fallback to an initial badge in both `Header.tsx` and `SettingsView.tsx`.
+- **Global Shortcuts**: Keyboard shortcuts (`N` or `Ctrl/Cmd+K`) open the Add Transaction modal from anywhere.
 
-### 6.7 Settings & Cloud Infrastructure Management (`src/components/settings/SettingsView.tsx`)
-- **Google Sheets Integration Panel**: Connect/disconnect Google accounts, view linked spreadsheet URL, force manual Push/Pull, and inspect last sync timestamps.
-- **Custom OAuth Client ID Configuration**: Allows advanced users to supply their own Google Cloud Console OAuth Client ID to avoid shared quota limits or origin mismatches.
-- **Local Storage Management**: Reset to default sample dataset, wipe all data cleanly, or trigger manual JSON backup restore.
+### 6.7 Data Portability & Settings (`src/components/settings/SettingsView.tsx`, `CsvImportModal.tsx`, `ExportModal.tsx`)
+- **CSV Bulk Import & Export**: Client-side CSV parser for imports and instant `.csv` / `.json` snapshot exports.
+- **Locked Production OAuth Config**: The custom Client ID input is intentionally omitted from Settings UI so users cannot break cloud sync by misconfiguring credentials.
+- **Clean Data Wipe**: Permanently wipes local transactions while setting `trackwise_is_initialized_v1` so demo seed data does not automatically reappear.
 
 ---
 
 ## 7. Environment Variables, Configuration & Build Setup
 
 ### 7.1 Environment Variables
-All client-exposed environment variables are prefixed with `VITE_` in compliance with Vite security standards.
+All client-exposed environment variables use the `VITE_` prefix:
 
 ```ini
 # .env.example
 # Google Cloud Console OAuth 2.0 Client ID (Web Application type)
-# Must have Authorized JavaScript Origins matching your local and production domains
 VITE_GOOGLE_CLIENT_ID=your-google-client-id.apps.googleusercontent.com
 ```
 
-> **Security Note:** The Google Client ID is an open public identifier. However, OAuth token issuance is strictly gated by the Google Cloud Console **Authorized JavaScript Origins** configuration.
+> **Security Note:** The Google OAuth Client ID is a public client identifier. Token issuance is strictly restricted by Google Cloud Console's **Authorized JavaScript Origins** and **Authorized Redirect URIs** rules.
 
 #### Required Google Cloud Console OAuth Settings:
 - **Application Type**: Web application
-- **Authorized JavaScript Origins**:
-  - `http://localhost:5173` (Local development)
-  - `http://127.0.0.1:5173` (Alternative local loopback)
-  - `https://your-production-app.vercel.app` (Production deployment)
-- **Authorized Redirect URIs**: Not required for GIS popup implicit flow (`gis_transform`).
-- **Enabled Google APIs in GCP Console**:
+- **Authorized JavaScript Origins** (no trailing slash `/`):
+  - `http://localhost:5173`
+  - `http://localhost:5174`
+  - `https://trackwise-git-main-pranav-28ae.vercel.app`
+  - `https://trackwise-ruddy.vercel.app`
+- **Authorized Redirect URIs** (Required for Direct Redirect Flow, no trailing slash `/`):
+  - `http://localhost:5173`
+  - `http://localhost:5174`
+  - `https://trackwise-git-main-pranav-28ae.vercel.app`
+  - `https://trackwise-ruddy.vercel.app`
+- **OAuth Consent Screen**:
+  - Add your Gmail address(es) under **Test users** while in Testing mode, or click **Publish App** for general access.
+- **Enabled APIs in GCP Console**:
   1. Google Drive API
   2. Google Sheets API
 
@@ -383,98 +392,108 @@ VITE_GOOGLE_CLIENT_ID=your-google-client-id.apps.googleusercontent.com
 
 #### Prerequisites
 - Node.js `v18.0.0` or higher (Node.js 20+ recommended)
-- npm `v9.0.0` or higher (or pnpm / yarn)
+- npm `v9.0.0` or higher
 
 #### Step-by-Step Installation
 ```bash
 # 1. Clone repository
-git clone https://github.com/your-username/trackwise-pro.git
-cd trackwise-pro
+git clone https://github.com/pranavtvarshan-stack/trackwise.git
+cd trackwise
 
 # 2. Install dependencies
 npm install
 
 # 3. Configure environment
 cp .env.example .env
-# Edit .env and supply your VITE_GOOGLE_CLIENT_ID
+# Edit .env and set VITE_GOOGLE_CLIENT_ID
 
 # 4. Start local development server
 npm run dev
 ```
-The application will launch at `http://localhost:5173/`.
+The dev server starts on strict port `http://localhost:5173/`.
 
 ### 7.3 Build & Code Splitting Optimization
 
-TrackWise Pro implements advanced Rollup manual chunking in `vite.config.ts` to ensure low initial bundle size and rapid Time-to-Interactive (TTI):
+`vite.config.ts` splits heavy vendor dependencies into dedicated cacheable chunks via Rollup's functional `manualChunks`:
 
 ```typescript
-// vite.config.ts snippet
+// vite.config.ts
 build: {
-  chunkSizeWarningLimit: 900,
   rollupOptions: {
     output: {
-      manualChunks: {
-        'vendor-charts': ['recharts', 'd3-shape', 'd3-path', 'd3-scale'],
-        'vendor-icons': ['lucide-react'],
-        'vendor': ['react', 'react-dom', 'date-fns', 'clsx', 'tailwind-merge', 'canvas-confetti'],
-      },
-    },
+      manualChunks(id) {
+        if (id.includes('node_modules')) {
+          if (id.includes('recharts') || id.includes('d3')) {
+            return 'vendor-charts';
+          }
+          if (id.includes('lucide-react')) {
+            return 'vendor-icons';
+          }
+          return 'vendor';
+        }
+      }
+    }
   },
+  chunkSizeWarningLimit: 900
 }
 ```
 
 #### Production Build Command
 ```bash
-# Type check and build optimized bundle
+# Type check and build optimized production bundle
 npm run build
 ```
-Build output is emitted to the `/dist` directory:
-- `dist/assets/index-[hash].js`: Application shell and state controllers
-- `dist/assets/vendor-[hash].js`: React core and standard utilities
-- `dist/assets/vendor-charts-[hash].js`: Recharts and D3 dependencies
-- `dist/assets/vendor-icons-[hash].js`: Lucide icon vectors
-- `dist/assets/index-[hash].css`: Compiled Tailwind styling ruleset
+Emitted `/dist` bundles:
+- `dist/index.html` (~9.9 kB)
+- `dist/assets/index-[hash].css` (~63.6 kB)
+- `dist/assets/index-[hash].js` (~231.5 kB)
+- `dist/assets/vendor-[hash].js` (~252.7 kB)
+- `dist/assets/vendor-charts-[hash].js` (~332.3 kB)
+- `dist/assets/vendor-icons-[hash].js` (~780.1 kB)
 
 ### 7.4 Deployment Configuration (Vercel)
 
-The project is structured for zero-configuration continuous deployment on [Vercel](https://vercel.com):
+Structured for zero-configuration continuous deployment on [Vercel](https://vercel.com):
 - **Framework Preset**: Vite
 - **Root Directory**: `./`
 - **Build Command**: `npm run build`
 - **Output Directory**: `dist`
 - **Install Command**: `npm install`
-- **Environment Variables**: Add `VITE_GOOGLE_CLIENT_ID` in Vercel Project Settings > Environment Variables.
+- **Environment Variables**: Configure `VITE_GOOGLE_CLIENT_ID` in Vercel Project Settings → Environment Variables.
 
 ---
 
 ## 8. Current Status, Known Gaps & Next Steps
 
 ### 8.1 Completed Milestones
-- [x] Complete TypeScript-enforced financial data engine with LocalStorage caching.
-- [x] Google Drive API v3 & Google Sheets API v4 integration using Google Identity Services (GIS).
-- [x] Dedicated 6-Sheet Google Spreadsheet synchronization (`Transactions`, `UPI Expenses`, `Cash Expenses`, `Budgets`, `Accounts`, `Recurring Bills`).
-- [x] Decimal-accurate currency representation for UPI and Cash balances across all summary widgets.
-- [x] Responsive layout with expandable detail cards for mobile and desktop viewports.
-- [x] PWA offline caching via Service Worker (`sw.js`) and Web App Manifest (`manifest.json`).
-- [x] Data import/export routines (CSV parser and JSON ledger backup).
+- [x] Strictly typed React 18 + TypeScript financial state engine with LocalStorage persistence.
+- [x] Popup-free **Google OAuth 2.0 Direct Redirect Flow** with CSRF `state` verification, StrictMode-safe hash parsing, and automatic URL token scrubbing.
+- [x] Dedicated 6-Sheet Google Spreadsheet synchronization (`Transactions`, `UPI Expenses`, `Cash Expenses`, `Budgets`, `Accounts`, `Recurring Bills`) with URL-encoded ranges and automatic sheet provisioning.
+- [x] Cross-domain/cross-device cloud restore safeguard preventing empty local state from overwriting cloud records on initial load.
+- [x] Decimal-accurate UPI & Cash balances with non-overlapping vertically stacked pills and expandable detail cards across mobile and desktop.
+- [x] Resilient Google profile avatars (`referrerPolicy="no-referrer"` + `onError` initial-badge fallback).
+- [x] Service Worker v3 (`trackwise-v3`) with network-first HTML delivery, Google domain bypass, and safe response cloning.
+- [x] Clean data wipe guard (`trackwise_is_initialized_v1`) preventing sample data re-seeding after clearing.
 
 ### 8.2 Known Gaps & Technical Considerations
-1. **OAuth Token Lifespan & Refresh Handling**:
-   - Google Identity Services token client provides access tokens with a 3,600-second (1 hour) expiration. 
-   - *Current Behavior*: If an expired token is detected during sync, the UI prompts the user to re-authenticate or re-trigger sign-in.
-   - *Improvement*: Implement silent background token refresh via GIS `prompt: ''` when the user has an active Google session.
-2. **Conflict Resolution Strategy**:
-   - *Current Behavior*: Synchronization operates on a "Last Push Wins" strategy during automated debounced updates, and a "Cloud Overrides Local" strategy on manual Pull.
-   - *Improvement*: Introduce a vector clock or field-level conflict reconciliation UI when modifications occur concurrently across two disconnected offline devices.
-3. **Bi-directional Cell Formula Preservation**:
-   - *Current Behavior*: `pushToGoogleSheets` rewrites data rows while re-injecting `=SUM(...)` formulas into summary sheets.
-   - *Improvement*: Maintain named ranges in Google Sheets so users can add custom pivot sheets that reference raw data without risking overwrite.
+1. **1-Hour OAuth Access Token Expiry (Implicit Flow Limitation)**:
+   - Client-side OAuth 2.0 implicit tokens expire after 3,600 seconds (1 hour) without refresh tokens (because refresh tokens require a backend client secret).
+   - *Current Behavior*: When expired, the app displays a non-intrusive **"Reconnect Sync"** banner while saving all changes locally; clicking it triggers a fast `login_hint` redirect to refresh the token.
+   - *Future Option*: Migrate to Authorization Code Flow + PKCE with a lightweight serverless token-refresh endpoint (e.g. Vercel Edge Function) for indefinite background sessions.
+2. **Legacy GIS Script Tag in `index.html`**:
+   - `index.html` still includes `<script src="https://accounts.google.com/gsi/client" async defer></script>` from the previous popup implementation. It is harmless, but can be removed to eliminate one unnecessary third-party script download.
+3. **Concurrent Offline Conflict Resolution**:
+   - *Current Behavior*: Cloud pulls merge missing IDs from remote sheets, while debounced pushes overwrite remote rows with local state ("Last Push Wins").
+   - *Improvement*: Compare per-record `updatedAt` timestamps during merge to reconcile simultaneous edits made offline across two devices.
+4. **Google OAuth App Verification (Production Publishing)**:
+   - While the GCP OAuth Consent Screen remains in **Testing** mode, only manually listed Test Users can sign in. Publishing the app (or completing Google's sensitive-scope verification for `spreadsheets`/`drive.file`) is required for unrestricted public onboarding.
 
 ### 8.3 Recommended Next Steps & Roadmap
-- **SMS / Push-Notification Expense Ingestion**: Integrate Web Notification and SMS Receipt regex parsers for automated UPI spend detection on Android devices.
-- **Multi-Currency & Real-Time FX Conversion**: Allow transactions in foreign currencies (USD, EUR, GBP) with automatic conversion back to base INR or USD.
-- **Biometric WebAuthn Unlock**: Add fingerprint / FaceID app lock support using the Web Authentication API (`navigator.credentials`) for enhanced on-device privacy.
-- **Export to PDF & Tax Computation**: Generate annual financial summary statements and income tax category expense schedules.
+- **Remove Unused GIS Script**: Clean up the unused `accounts.google.com/gsi/client` script tag in `index.html`.
+- **Timestamp-Based 3-Way Sync Merge**: Reconcile concurrent offline edits across devices using `updatedAt` + `isDeleted` tombstones.
+- **Multi-Currency & FX Conversion**: Support foreign currency transactions with automatic conversion to the user's base currency.
+- **Biometric App Lock (WebAuthn)**: Optional device PIN / fingerprint lock for enhanced local privacy on shared devices.
+- **Automated PDF Monthly Statements**: Export formatted monthly financial reports and tax-ready category summaries.
 
 ---
-*End of Document. Generated automatically by Antigravity Technical Audit.*
+*End of Document. Updated to reflect current codebase architecture and production status.*
