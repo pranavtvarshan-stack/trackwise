@@ -14,6 +14,7 @@ import { useGoogleAuth } from '../../context/GoogleAuthContext';
 export const LoginPortal: React.FC = () => {
   const {
     loginWithGoogle,
+    loginWithRedirect,
     continueOffline,
     isAuthenticating,
     authError,
@@ -149,6 +150,18 @@ export const LoginPortal: React.FC = () => {
                 </>
               )}
             </button>
+
+            {/* Direct Redirect Option (Guaranteed to work if popups are blocked or closed) */}
+            {authError && (
+              <button
+                type="button"
+                onClick={loginWithRedirect}
+                className="w-full py-2.5 px-4 text-xs font-bold text-indigo-700 dark:text-indigo-300 bg-indigo-50/90 dark:bg-indigo-950/70 border border-indigo-200 dark:border-indigo-800 rounded-xl hover:bg-indigo-100 transition flex items-center justify-center gap-2 cursor-pointer shadow-2xs animate-fade-in"
+              >
+                <span>Try Direct Redirect Sign-In (Popup-Free)</span>
+                <ArrowRight size={13} />
+              </button>
+            )}
 
             {/* Secondary Action: Continue Offline */}
             <button

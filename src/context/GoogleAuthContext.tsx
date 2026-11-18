@@ -90,7 +90,8 @@ interface GoogleAuthContextType {
   syncInfo: GoogleSyncInfo;
   effectiveClientId: string;
   isConfigured: boolean;
-  loginWithGoogle: () => void;
+  loginWithGoogle: (options?: { forceRedirect?: boolean } | React.MouseEvent) => void;
+  loginWithRedirect: () => void;
   logout: () => void;
   continueOffline: () => void;
   setCustomClientId: (id: string) => void;
@@ -189,11 +190,100 @@ export const GoogleAuthProvider: React.FC<{ children: React.ReactNode }> = ({ ch
     return accessToken;
   }, [accessToken, tokenExpiresAt]);
 
+  // Pre-load Google Identity Services library immediately on startup
+  useEffect(() => {
+    loadGIS().catch(() => {});
+  }, []);
+
+  // Shared authorization code processing function (handles both popup postmessage & redirect callbacks)
+  const processAuthCode = useCallback(
+    async (code: string, redirectUri: string) => {
+      setIsAuthenticating(true);
+      setAuthError(null);
+      try {
+        const exchangeRes = await fetch('/api/auth/exchange', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          credentials: 'include',
+          body: JSON.stringify({
+            code,
+            redirect_uri: redirectUri,
+          }),
+        });
+
+        const exchangeData = await exchangeRes.json();
+        if (!exchangeRes.ok || exchangeData.error) {
+          throw new Error(exchangeData.error || 'Failed to exchange authorization code.');
+        }
+
+        const freshToken = exchangeData.access_token;
+        const expiresIn = exchangeData.expires_in || 3600;
+        const expiresAt = Date.now() + expiresIn * 1000;
+
+        setAccessToken(freshToken);
+        setTokenExpiresAt(expiresAt);
+        localStorage.setItem(AUTH_STORAGE_KEYS.TOKEN, freshToken);
+        localStorage.setItem(AUTH_STORAGE_KEYS.EXPIRES_AT, expiresAt.toString());
+        localStorage.setItem(AUTH_STORAGE_KEYS.OFFLINE_MODE, 'false');
+
+        // Fetch user identity profile
+        const profile = await fetchGoogleUserInfo(freshToken);
+        setUser(profile);
+        localStorage.setItem(AUTH_STORAGE_KEYS.USER, JSON.stringify(profile));
+        setIsOfflineMode(false);
+        setIsAuthenticating(false);
+
+        // Discover or create Google Sheet
+        setSyncInfo((prev) => ({ ...prev, syncState: 'syncing', errorMessage: undefined }));
+        const sheet = await findOrCreateTrackWiseSheet(freshToken);
+        setSyncInfo((prev) => ({
+          ...prev,
+          spreadsheetId: sheet.spreadsheetId,
+          spreadsheetUrl: sheet.spreadsheetUrl,
+          syncState: 'idle',
+        }));
+        localStorage.setItem(AUTH_STORAGE_KEYS.SHEET_ID, sheet.spreadsheetId);
+        localStorage.setItem(AUTH_STORAGE_KEYS.SHEET_URL, sheet.spreadsheetUrl);
+      } catch (err: any) {
+        console.error('Auth code exchange error:', err);
+        setIsAuthenticating(false);
+        setAuthError(err.message || 'Failed to complete Google Sign-In exchange.');
+      }
+    },
+    []
+  );
+
+  // Handle redirect callback (?code=... or ?error=...) on page load
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const searchParams = new URLSearchParams(window.location.search);
+    const code = searchParams.get('code');
+    const error = searchParams.get('error');
+
+    if (error) {
+      setAuthError(
+        error === 'access_denied'
+          ? 'Google Sign-In was cancelled or access was denied.'
+          : `Google Sign-In error: ${error}`
+      );
+      try {
+        window.history.replaceState(null, '', window.location.pathname);
+      } catch {}
+      return;
+    }
+
+    if (code) {
+      try {
+        window.history.replaceState(null, '', window.location.pathname);
+      } catch {}
+      processAuthCode(code, window.location.origin);
+    }
+  }, [processAuthCode]);
+
   // Try silent session restoration on initial mount via HttpOnly refresh cookie
   useEffect(() => {
     let mounted = true;
     const trySilentRestore = async () => {
-      // If we already have a valid token in memory, nothing to do
       if (accessToken && tokenExpiresAt && Date.now() < tokenExpiresAt - 60000) {
         return;
       }
@@ -253,119 +343,137 @@ export const GoogleAuthProvider: React.FC<{ children: React.ReactNode }> = ({ ch
   }, []);
 
   /**
-   * Launch XSS-Proof OAuth Authorization Code Flow via Google Identity Services (GIS)
-   * Uses initCodeClient (popup mode with postmessage redirect) so it works cleanly without
-   * redirect_uri_mismatch errors, and stores the refresh token in an HttpOnly cookie.
+   * Launch Full Redirect Authorization Code Flow.
+   * Required for mobile browsers, standalone PWAs, or when popups are blocked.
    */
-  const loginWithGoogle = useCallback(async () => {
+  const loginWithRedirect = useCallback(() => {
     setAuthError(null);
-
     if (!effectiveClientId) {
       setAuthError('Google Client ID is not configured. Please check VITE_GOOGLE_CLIENT_ID.');
       return;
     }
+    const redirectUri = window.location.origin;
 
-    setIsAuthenticating(true);
+    if ((window as any).google?.accounts?.oauth2?.initCodeClient) {
+      try {
+        const client = (window as any).google.accounts.oauth2.initCodeClient({
+          client_id: effectiveClientId,
+          scope: OAUTH_SCOPES,
+          ux_mode: 'redirect',
+          redirect_uri: redirectUri,
+          access_type: 'offline',
+          prompt: 'consent',
+        });
+        client.requestCode();
+        return;
+      } catch (err) {
+        console.warn('[TrackWise Auth] GIS redirect call failed, using fallback URL:', err);
+      }
+    }
 
-    try {
-      await loadGIS();
+    // Direct HTTP redirect fallback
+    const params = new URLSearchParams({
+      client_id: effectiveClientId,
+      redirect_uri: redirectUri,
+      response_type: 'code',
+      scope: OAUTH_SCOPES,
+      access_type: 'offline',
+      prompt: 'consent',
+    });
+    window.location.assign(`https://accounts.google.com/o/oauth2/v2/auth?${params.toString()}`);
+  }, [effectiveClientId]);
 
-      if (!(window as any).google?.accounts?.oauth2?.initCodeClient) {
-        throw new Error('Google Identity Services failed to initialize. Please check your internet connection.');
+  /**
+   * Launch Google Sign-In:
+   * - Automatically detects mobile browsers & standalone PWAs and defaults to Redirect flow
+   * - On desktop, attempts synchronous popup flow, providing an instant redirect fallback if closed/blocked
+   */
+  const loginWithGoogle = useCallback(
+    async (options?: { forceRedirect?: boolean } | React.MouseEvent) => {
+      setAuthError(null);
+
+      if (!effectiveClientId) {
+        setAuthError('Google Client ID is not configured. Please check VITE_GOOGLE_CLIENT_ID.');
+        return;
       }
 
-      const client = (window as any).google.accounts.oauth2.initCodeClient({
-        client_id: effectiveClientId,
-        scope: OAUTH_SCOPES,
-        ux_mode: 'popup',
-        access_type: 'offline',
-        prompt: 'consent',
-        callback: async (response: { code?: string; error?: string }) => {
-          if (response.error) {
+      const forceRedirect = Boolean(options && 'forceRedirect' in options && options.forceRedirect);
+
+      const isMobile =
+        typeof window !== 'undefined' &&
+        (window.matchMedia('(display-mode: standalone)').matches ||
+          /Android|iPhone|iPad|iPod|Opera Mini|IEMobile|WPDesktop/i.test(navigator.userAgent));
+
+      if (forceRedirect || isMobile) {
+        loginWithRedirect();
+        return;
+      }
+
+      setIsAuthenticating(true);
+
+      // Pre-check GIS library
+      if (!(window as any).google?.accounts?.oauth2?.initCodeClient) {
+        try {
+          await loadGIS();
+        } catch {
+          loginWithRedirect();
+          return;
+        }
+      }
+
+      if (!(window as any).google?.accounts?.oauth2?.initCodeClient) {
+        loginWithRedirect();
+        return;
+      }
+
+      try {
+        const client = (window as any).google.accounts.oauth2.initCodeClient({
+          client_id: effectiveClientId,
+          scope: OAUTH_SCOPES,
+          ux_mode: 'popup',
+          access_type: 'offline',
+          prompt: 'consent',
+          callback: async (response: { code?: string; error?: string }) => {
+            if (response.error) {
+              setIsAuthenticating(false);
+              if (response.error === 'access_denied') {
+                setAuthError('Google Sign-In was cancelled or access was denied.');
+              } else {
+                setAuthError(`Google Sign-In error: ${response.error}`);
+              }
+              return;
+            }
+
+            if (!response.code) {
+              setIsAuthenticating(false);
+              setAuthError('No authorization code was returned by Google.');
+              return;
+            }
+
+            await processAuthCode(response.code, 'postmessage');
+          },
+          error_callback: (err: any) => {
             setIsAuthenticating(false);
-            if (response.error === 'access_denied') {
-              setAuthError('Google Sign-In was cancelled or access was denied.');
+            if (err?.type === 'popup_closed') {
+              setAuthError(
+                'Popup was closed before sign-in completed. If the popup closed automatically, tap "Sign in with Redirect" below.'
+              );
+            } else if (err?.type === 'popup_failed_to_open') {
+              setAuthError('Sign-in popup blocked by browser. Tap "Sign in with Redirect" below.');
             } else {
-              setAuthError(`Google Sign-In error: ${response.error}`);
+              setAuthError(err?.message || 'Google Sign-In popup failed to open.');
             }
-            return;
-          }
+          },
+        });
 
-          if (!response.code) {
-            setIsAuthenticating(false);
-            setAuthError('No authorization code was returned by Google.');
-            return;
-          }
-
-          try {
-            // Exchange authorization code for tokens via backend serverless route
-            const exchangeRes = await fetch('/api/auth/exchange', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              credentials: 'include',
-              body: JSON.stringify({
-                code: response.code,
-                redirect_uri: 'postmessage',
-              }),
-            });
-
-            const exchangeData = await exchangeRes.json();
-            if (!exchangeRes.ok || exchangeData.error) {
-              throw new Error(exchangeData.error || 'Failed to exchange authorization code.');
-            }
-
-            const freshToken = exchangeData.access_token;
-            const expiresIn = exchangeData.expires_in || 3600;
-            const expiresAt = Date.now() + expiresIn * 1000;
-
-            setAccessToken(freshToken);
-            setTokenExpiresAt(expiresAt);
-            localStorage.setItem(AUTH_STORAGE_KEYS.TOKEN, freshToken);
-            localStorage.setItem(AUTH_STORAGE_KEYS.EXPIRES_AT, expiresAt.toString());
-            localStorage.setItem(AUTH_STORAGE_KEYS.OFFLINE_MODE, 'false');
-
-            // Fetch user identity profile
-            const profile = await fetchGoogleUserInfo(freshToken);
-            setUser(profile);
-            localStorage.setItem(AUTH_STORAGE_KEYS.USER, JSON.stringify(profile));
-            setIsOfflineMode(false);
-            setIsAuthenticating(false);
-
-            // Discover or create Google Sheet
-            setSyncInfo((prev) => ({ ...prev, syncState: 'syncing', errorMessage: undefined }));
-            const sheet = await findOrCreateTrackWiseSheet(freshToken);
-            setSyncInfo((prev) => ({
-              ...prev,
-              spreadsheetId: sheet.spreadsheetId,
-              spreadsheetUrl: sheet.spreadsheetUrl,
-              syncState: 'idle',
-            }));
-            localStorage.setItem(AUTH_STORAGE_KEYS.SHEET_ID, sheet.spreadsheetId);
-            localStorage.setItem(AUTH_STORAGE_KEYS.SHEET_URL, sheet.spreadsheetUrl);
-          } catch (err: any) {
-            console.error('Auth code exchange error:', err);
-            setIsAuthenticating(false);
-            setAuthError(err.message || 'Failed to complete Google Sign-In exchange.');
-          }
-        },
-        error_callback: (err: any) => {
-          setIsAuthenticating(false);
-          if (err?.type === 'popup_closed') {
-            setAuthError('Google Sign-In cancelled (popup was closed).');
-          } else if (err?.type === 'popup_failed_to_open') {
-            setAuthError('Sign-in popup blocked by browser. Please allow popups for TrackWise and retry.');
-          } else {
-            setAuthError(err?.message || 'Google Sign-In popup failed to open.');
-          }
-        },
-      });
-
-      client.requestCode();
-    } catch (err: any) {
-      setIsAuthenticating(false);
-      setAuthError(err.message || 'Failed to start Google Sign-In.');
-    }
-  }, [effectiveClientId]);
+        client.requestCode();
+      } catch (err: any) {
+        setIsAuthenticating(false);
+        setAuthError(err.message || 'Failed to start Google Sign-In.');
+      }
+    },
+    [effectiveClientId, loginWithRedirect, processAuthCode]
+  );
 
   const reconnectSync = useCallback(() => {
     loginWithGoogle();
@@ -600,6 +708,7 @@ export const GoogleAuthProvider: React.FC<{ children: React.ReactNode }> = ({ ch
         effectiveClientId,
         isConfigured,
         loginWithGoogle,
+        loginWithRedirect,
         logout,
         continueOffline,
         setCustomClientId,
