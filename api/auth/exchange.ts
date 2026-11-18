@@ -13,7 +13,7 @@ export default async function handler(req: any, res: any) {
   }
 
   try {
-    const { code, redirect_uri } = await getRequestBody(req);
+    const { code, redirect_uri, code_verifier } = await getRequestBody(req);
 
     if (!code) {
       return sendJson(res, 400, { error: 'Missing authorization code' });
@@ -42,6 +42,10 @@ export default async function handler(req: any, res: any) {
       redirect_uri: redirect_uri || 'postmessage',
       grant_type: 'authorization_code',
     });
+
+    if (code_verifier) {
+      tokenParams.set('code_verifier', code_verifier);
+    }
 
     const googleResponse = await fetch('https://oauth2.googleapis.com/token', {
       method: 'POST',

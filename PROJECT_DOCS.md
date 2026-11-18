@@ -1,6 +1,6 @@
 # Project Build & Architecture Document: TrackWise Pro
 
-**Version:** 1.0.0  
+**Version:** 1.1.0  
 **Last Updated:** November 2026  
 **Author / Engineering Team:** TrackWise Pro Development Team  
 **Status:** Production-Ready / Continuous Deployment  
@@ -18,11 +18,14 @@
 - **Cross-Device Mobile & Desktop Users**: Users requiring a lightweight, installable PWA that functions seamlessly across desktop browsers (Chrome, Opera, Edge, Brave, Safari), mobile browsers, and standalone PWA installations with resilient offline support.
 
 ### 1.3 Core Value Proposition
-1. **True Data Ownership**: The application has no proprietary database backend. Data resides directly in the browser's persistent storage and synchronizes bidirectionally to a private spreadsheet on the user's personal Google Drive account.
+1. **True Data Ownership**: The application has no proprietary database backend. Data resides directly in the browser's persistent storage (IndexedDB with storage persistence lock) and synchronizes bidirectionally to a private spreadsheet on the user's personal Google Drive account.
 2. **Instant Zero-Latency UI**: All ledger queries, analytics, category filters, and budget recalculations execute client-side in sub-millisecond timeframes.
 3. **Automated Multi-Sheet Spreadsheet Architecture**: Syncs with Google Sheets via a structured 6-sheet schema (`Transactions`, `UPI Expenses`, `Cash Expenses`, `Budgets`, `Accounts`, `Recurring Bills`) allowing users to execute external analysis, pivot tables, or backups directly in Google Sheets.
-4. **Popup-Free Cross-Browser Authentication**: Uses Google's official OAuth 2.0 Direct Redirect Flow (`response_type=token`) with CSRF `state` verification—eliminating popup blockers, COOP (`Cross-Origin-Opener-Policy`) conflicts, and third-party cookie failures across Opera, Brave, Safari, and installed PWAs.
-5. **Resilient Offline Capabilities**: Operates offline via Service Worker v3 (`trackwise-v3`) asset caching and local storage fallback, syncing automatically when network connectivity and OAuth session validity are restored.
+4. **Direct Redirect Flow with PKCE S256 & CSRF Protection**: Uses Google's official OAuth 2.0 Authorization Code Flow (`response_type=code`) with PKCE (`code_challenge` / `code_verifier` S256) and CSRF `state` verification stored in `localStorage` with a 10-minute expiry—eliminating popup blockers, COOP (`Cross-Origin-Opener-Policy`) conflicts, and third-party cookie failures across desktop and mobile devices.
+5. **XSS-Proof HttpOnly Cookies & Silent Token Refresh**: Refresh tokens are stored strictly inside an `HttpOnly; Secure; SameSite=Lax; Path=/api/auth` cookie (never accessible to JavaScript), auto-refreshed via `/api/auth/refresh` without hourly reconnect banners.
+6. **Stateless Encrypted Safari → iOS PWA Pairing Handoff**: Because iOS isolates Home Screen PWAs into separate sandboxes from Safari, an encrypted AES-256-GCM handoff (`/api/auth/handoff`) pairs installed PWAs within a 2-minute window without requiring in-memory server state.
+7. **Live-Index Incremental Sync Engine**: Maps actual row positions dynamically from remote `values:batchGet` calls rather than caching static row indexes. Uses `values:batchUpdate` for modified rows, `values:append` for new entries, and executes zero remote writes if nothing changed.
+8. **Asynchronous IndexedDB Storage with Account Isolation**: Namespaces local financial collections per user email (falling back to `guest` in offline mode) with `navigator.storage.persist()` to protect against Safari eviction.
 
 ---
 
@@ -188,36 +191,41 @@ flowchart TD
 
 ### 4.2 End-to-End Authentication & Data Synchronization Lifecycle
 
-1. **OAuth 2.0 Direct Redirect Handshake (Popup-Free)**:
-   - When the user clicks **"Sign in with Google"** or **"Sign in to Backup"**, `GoogleAuthContext.tsx` generates a cryptographically random CSRF `state` nonce (stored in `sessionStorage` under `trackwise_oauth_state`) and redirects the current browser tab to `https://accounts.google.com/o/oauth2/v2/auth` with:
-     - `response_type=token`
-     - `redirect_uri=window.location.origin` (no trailing slash)
-     - `scope=openid email profile https://www.googleapis.com/auth/drive.file https://www.googleapis.com/auth/spreadsheets`
-     - `prompt=select_account consent` (or `login_hint=user.email` during `reconnectSync()`).
-   - Because authentication happens in the full browser tab rather than a cross-origin popup, it completely avoids COOP (`Cross-Origin-Opener-Policy`), `window.closed` polling errors, popup blockers, and Opera/Brave/Safari cross-window restrictions.
+1. **OAuth 2.0 Direct Redirect with PKCE (S256) & CSRF Verification**:
+   - When the user clicks **"Sign in with Google"**, `GoogleAuthContext.tsx` generates:
+     - Cryptographic CSRF `state` nonce
+     - PKCE code pair (`code_verifier` and `code_challenge` SHA-256 base64url)
+   - These are saved into `localStorage` (`trackwise_oauth_pkce`) with a strict **10-minute expiry window** so mobile PWAs returning from an external browser or Custom Tab never lose session state.
+   - The browser redirects to `https://accounts.google.com/o/oauth2/v2/auth` with:
+     - `response_type=code`
+     - `redirect_uri=window.location.origin` (strictly origin, no trailing slash)
+     - `scope=openid email profile https://www.googleapis.com/auth/drive.file`
+     - `code_challenge`, `code_challenge_method=S256`, `prompt=consent`, `access_type=offline`
+   - Because authentication uses top-level direct redirects, it eliminates popup blockers, COOP (`Cross-Origin-Opener-Policy`), `window.closed` polling errors, and third-party cookie restrictions across desktop, iOS Safari, and mobile PWAs.
 
-2. **StrictMode-Safe Hash Consumption & URL Scrubbing**:
-   - When Google redirects back to `${origin}/#state=...&access_token=...&expires_in=3599`, `consumeOAuthRedirectHash()` runs **once at module load** before React mounts—preventing React 18 `<StrictMode>` double-mounts from dropping the token.
-   - It validates the CSRF `state`, persists `trackwise_google_token` and `trackwise_google_expires_at` to `localStorage`, clears `trackwise_offline_mode`, and immediately removes the token from the URL bar using `window.history.replaceState`.
-   - `GoogleAuthProvider`'s effect (keyed on `[accessToken]`) fetches the Google profile via `fetchGoogleUserInfo()`, unlocks the Dashboard immediately, and resolves/creates the spreadsheet in the background.
+2. **StrictMode-Safe Single-Use Code Consumption & Serverless Token Exchange**:
+   - When Google redirects back to `${origin}/?code=...&state=...`, `consumeRedirectUrlParams()` runs immediately at module load:
+     - Strips `?code=...&state=...` from the browser URL instantly via `window.history.replaceState`.
+     - Validates returned `state` against `localStorage`, enforcing the 10-minute TTL.
+     - Retrieves `code_verifier` and immediately wipes the PKCE session from `localStorage`.
+   - A module-level `redeemedCodeSet` (`Set<string>`) guarantees that React 18 `<StrictMode>` double-mounting will **never** trigger duplicate `/api/auth/exchange` calls for the same single-use authorization code.
+   - `/api/auth/exchange` exchanges the code with Google's token endpoint (`https://oauth2.googleapis.com/token`) using server-side `GOOGLE_CLIENT_SECRET`.
+   - The returned `refresh_token` is saved in an **`HttpOnly; Secure; SameSite=Lax; Path=/api/auth`** cookie (max-age 180 days) rather than being exposed to browser JavaScript.
+   - The ephemeral `access_token` is returned to the client and silently refreshed via `/api/auth/refresh` whenever `Date.now() >= expiresAt - 60000`, removing hourly reconnect banners entirely.
 
-3. **Multi-Tab Mutex & Atomic Pull-Before-Push Reconciliation**:
-   - Every sync (`performSync`) acquires a cross-tab mutex via the browser **Web Locks API** (`navigator.locks.request('trackwise_sheets_sync', ...)`), with an in-memory promise-queue fallback lock when `navigator.locks` is unavailable—preventing two open tabs on the same device from executing overlapping sync cycles.
-   - Inside the lock, `performSync` **always pulls remote rows first** (`values:batchGet` with URL-encoded ranges) before writing anything.
-   - Local and remote collections (`Transactions`, `Budgets`, `Recurring Bills`) are reconciled per `id` via `mergeEntityCollections()`:
-     1. **Single-side ID**: Kept unless `isDeleted === true` and `updatedAt` is older than 30 days.
-     2. **Dual-side ID (Monotonic Revision Precedence)**: The record with the higher `rev` wins (protecting against device system clock drift).
-     3. **Equal `rev` Tie-Breaker**: When two devices edit the same record independently offline at the same `rev`, the more recent `updatedAt` ISO timestamp wins.
-     4. **30-Day Tombstone Pruning**: Soft-deleted records older than 30 days are automatically purged from both local state and Google Sheets.
-   - Live UPI and Cash wallet balances are recomputed directly from the merged active transactions (`computeSplitWalletBalances`) so the `Accounts` tab always matches reconciled state.
+3. **Stateless Encrypted Safari → iOS PWA Pairing Handoff**:
+   - Because iOS Safari isolates standalone Home Screen PWAs into separate sandboxes that do not share cookies or storage with Safari, users can pair their installed PWA seamlessly:
+     - In Safari, the user taps **"Generate Pairing Code"** in Settings.
+     - `GET /api/auth/handoff` reads the Safari HttpOnly refresh cookie and encrypts `{ refresh_token, exp: Date.now() + 120000 }` using Node crypto **AES-256-GCM** keyed by `GOOGLE_CLIENT_SECRET`.
+     - In the installed Home Screen PWA, the user taps **"iPhone Home Screen App? Pair with Safari"** and submits the pairing code.
+     - `POST /api/auth/handoff` verifies AES-256-GCM integrity, checks the 2-minute expiration, and sets the HttpOnly refresh cookie directly inside the iOS PWA container.
 
-4. **Trailing Ghost Row Elimination & Atomic Push**:
-   - Immediately before writing, `pushDataToSheet()` calls `values:batchClear` across all 6 data ranges (`Transactions!A2:L`, `'UPI Expenses'!A2:H`, `'Cash Expenses'!A2:H`, `Budgets!A2:I`, `Accounts!A2:D`, `'Recurring Bills'!A2:N`)—preserving row-1 headers and eliminating leftover ghost rows when datasets shrink.
-   - It then writes upgraded headers + reconciled rows atomically via `values:batchUpdate` (`USER_ENTERED`), using dynamic `=SUMIFS` formulas in `UPI Expenses` and `Cash Expenses`.
-
-5. **Loop-Free Local State Updates & Throttled Focus Sync**:
-   - `App.tsx` updates local React state & `localStorage` **only** when `localChanged.*` indicates the merged collection differs from local state, recording a canonical data fingerprint (`computeSyncFingerprint`) beforehand to prevent infinite re-render/sync loops.
-   - Sync triggers automatically on initial login, 1.5s debounced local edits, `online` reconnects, manual **"Sync Now"**, and throttled `visibilitychange` / `window.focus` events (at most once every 15 seconds when switching back to the app/tab).
+4. **Live-Index Incremental Sync Engine & Mutex Web Locks**:
+   - Every sync (`performSync`) acquires a cross-tab mutex via the browser **Web Locks API** (`navigator.locks.request('trackwise_sheets_sync', ...)`).
+   - Inside the lock, `performSync` pulls remote rows first via `values:batchGet` and constructs a live `Map<id, actualSheetRowNumber>` directly from the pulled response (never relying on stale local row caches).
+   - Local and remote records (`Transactions`, `Budgets`, `Recurring Bills`) are reconciled using monotonic `rev` precedence and `updatedAt` timestamps.
+   - If nothing changed remotely (`!remoteChanged`), write calls are skipped entirely.
+   - Only modified rows are updated at their live `actualSheetRowNumber` via `values:batchUpdate`, and brand-new rows are appended via `values:append`. `values:batchClear` + full rewrites are strictly reserved for initial setup or 30-day tombstone pruning.
 
 ---
 

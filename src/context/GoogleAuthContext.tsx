@@ -14,6 +14,7 @@ import {
 } from '../services/googleSheetsService';
 
 const SYNC_LOCK_NAME = 'trackwise_sheets_sync';
+const OAUTH_PKCE_STORAGE_KEY = 'trackwise_oauth_pkce';
 
 // In-memory sequential fallback mutex when Web Locks API is unavailable
 let fallbackSyncLockChain: Promise<void> = Promise.resolve();
@@ -52,32 +53,143 @@ export const AUTH_STORAGE_KEYS = {
   OAUTH_STATE: 'trackwise_oauth_state',
 };
 
-// Request strictly drive.file scope + openid email profile (removing broad spreadsheets scope)
+// Request strictly drive.file scope + openid email profile
 const OAUTH_SCOPES = 'openid email profile https://www.googleapis.com/auth/drive.file';
 
-let gisLoadPromise: Promise<void> | null = null;
-function loadGIS(): Promise<void> {
-  if (typeof window === 'undefined') return Promise.resolve();
-  if ((window as any).google?.accounts?.oauth2) return Promise.resolve();
-  if (gisLoadPromise) return gisLoadPromise;
-
-  gisLoadPromise = new Promise<void>((resolve, reject) => {
-    const existing = document.querySelector('script[src="https://accounts.google.com/gsi/client"]');
-    if (existing) {
-      existing.addEventListener('load', () => resolve());
-      existing.addEventListener('error', () => reject(new Error('Failed to load Google Identity Services')));
-      return;
-    }
-    const script = document.createElement('script');
-    script.src = 'https://accounts.google.com/gsi/client';
-    script.async = true;
-    script.defer = true;
-    script.onload = () => resolve();
-    script.onerror = () => reject(new Error('Failed to load Google Identity Services'));
-    document.head.appendChild(script);
-  });
-  return gisLoadPromise;
+interface StoredPKCE {
+  state: string;
+  verifier: string;
+  expiresAt: number;
 }
+
+function base64UrlEncode(buffer: ArrayBuffer): string {
+  let binary = '';
+  const bytes = new Uint8Array(buffer);
+  for (let i = 0; i < bytes.byteLength; i++) {
+    binary += String.fromCharCode(bytes[i]);
+  }
+  return btoa(binary)
+    .replace(/\+/g, '-')
+    .replace(/\//g, '_')
+    .replace(/=+$/, '');
+}
+
+async function generatePKCE(): Promise<{ verifier: string; challenge: string } | null> {
+  if (typeof window === 'undefined' || !window.crypto) {
+    return null;
+  }
+  const array = new Uint8Array(32);
+  window.crypto.getRandomValues(array);
+  const verifier = base64UrlEncode(array.buffer);
+
+  if (window.crypto.subtle && typeof window.crypto.subtle.digest === 'function') {
+    try {
+      const encoder = new TextEncoder();
+      const data = encoder.encode(verifier);
+      const digest = await window.crypto.subtle.digest('SHA-256', data);
+      const challenge = base64UrlEncode(digest);
+      return { verifier, challenge };
+    } catch {
+      return null;
+    }
+  }
+  return null;
+}
+
+interface InitialRedirectResult {
+  code: string | null;
+  state: string | null;
+  error: string | null;
+  codeVerifier: string | null;
+}
+
+/**
+ * StrictMode-Safe Single-Use Code Consumption:
+ * Consumes and scrubs ?code=...&state=... from the URL bar immediately at module load
+ * so React 18 <StrictMode> double-mounting or page refreshes can NEVER replay the same code.
+ */
+function consumeRedirectUrlParams(): InitialRedirectResult {
+  if (typeof window === 'undefined' || !window.location.search) {
+    return { code: null, state: null, error: null, codeVerifier: null };
+  }
+
+  const searchParams = new URLSearchParams(window.location.search);
+  const code = searchParams.get('code');
+  const returnedState = searchParams.get('state');
+  const error = searchParams.get('error');
+
+  if (!code && !error) {
+    return { code: null, state: null, error: null, codeVerifier: null };
+  }
+
+  // Always scrub ?code=...&state=... from the URL bar immediately
+  try {
+    window.history.replaceState(null, '', window.location.pathname);
+  } catch {}
+
+  if (error) {
+    return {
+      code: null,
+      state: returnedState,
+      error:
+        error === 'access_denied'
+          ? 'Google Sign-In was cancelled or access was denied.'
+          : `Google Sign-In error: ${error}`,
+      codeVerifier: null,
+    };
+  }
+
+  if (!code) {
+    return { code: null, state: null, error: null, codeVerifier: null };
+  }
+
+  // Validate CSRF state & retrieve PKCE code_verifier from localStorage (with 10-minute expiry)
+  const rawPKCE = localStorage.getItem(OAUTH_PKCE_STORAGE_KEY);
+  localStorage.removeItem(OAUTH_PKCE_STORAGE_KEY);
+
+  let codeVerifier: string | null = null;
+  if (rawPKCE) {
+    try {
+      const parsed: StoredPKCE = JSON.parse(rawPKCE);
+      if (parsed.expiresAt && Date.now() > parsed.expiresAt) {
+        return {
+          code: null,
+          state: returnedState,
+          error: 'Sign-in session expired (10-minute timeout). Please sign in again.',
+          codeVerifier: null,
+        };
+      }
+      if (parsed.state !== returnedState) {
+        return {
+          code: null,
+          state: returnedState,
+          error: 'OAuth security state mismatch (possible CSRF attack). Authentication blocked.',
+          codeVerifier: null,
+        };
+      }
+      codeVerifier = parsed.verifier;
+    } catch {
+      return {
+        code: null,
+        state: returnedState,
+        error: 'Corrupt authentication session state. Please sign in again.',
+        codeVerifier: null,
+      };
+    }
+  } else {
+    return {
+      code: null,
+      state: returnedState,
+      error: 'Missing security session. Please initiate sign-in directly from TrackWise.',
+      codeVerifier: null,
+    };
+  }
+
+  return { code, state: returnedState, error: null, codeVerifier };
+}
+
+const initialRedirectResult = consumeRedirectUrlParams();
+const redeemedCodeSet = new Set<string>();
 
 interface GoogleAuthContextType {
   user: GoogleUser | null;
@@ -90,7 +202,7 @@ interface GoogleAuthContextType {
   syncInfo: GoogleSyncInfo;
   effectiveClientId: string;
   isConfigured: boolean;
-  loginWithGoogle: (options?: { forceRedirect?: boolean } | React.MouseEvent) => void;
+  loginWithGoogle: () => void;
   loginWithRedirect: () => void;
   logout: () => void;
   continueOffline: () => void;
@@ -147,8 +259,10 @@ export const GoogleAuthProvider: React.FC<{ children: React.ReactNode }> = ({ ch
     return localStorage.getItem(AUTH_STORAGE_KEYS.OFFLINE_MODE) === 'true';
   });
 
-  const [isAuthenticating, setIsAuthenticating] = useState<boolean>(false);
-  const [authError, setAuthError] = useState<string | null>(null);
+  const [isAuthenticating, setIsAuthenticating] = useState<boolean>(() => {
+    return Boolean(initialRedirectResult.code && !initialRedirectResult.error);
+  });
+  const [authError, setAuthError] = useState<string | null>(() => initialRedirectResult.error);
 
   const [syncInfo, setSyncInfo] = useState<GoogleSyncInfo>(() => {
     return {
@@ -190,14 +304,9 @@ export const GoogleAuthProvider: React.FC<{ children: React.ReactNode }> = ({ ch
     return accessToken;
   }, [accessToken, tokenExpiresAt]);
 
-  // Pre-load Google Identity Services library immediately on startup
-  useEffect(() => {
-    loadGIS().catch(() => {});
-  }, []);
-
-  // Shared authorization code processing function (handles both popup postmessage & redirect callbacks)
+  // Shared authorization code processing function with exact redirect_uri and PKCE verifier
   const processAuthCode = useCallback(
-    async (code: string, redirectUri: string) => {
+    async (code: string, redirectUri: string, codeVerifier: string | null) => {
       setIsAuthenticating(true);
       setAuthError(null);
       try {
@@ -208,6 +317,7 @@ export const GoogleAuthProvider: React.FC<{ children: React.ReactNode }> = ({ ch
           body: JSON.stringify({
             code,
             redirect_uri: redirectUri,
+            code_verifier: codeVerifier || undefined,
           }),
         });
 
@@ -224,13 +334,13 @@ export const GoogleAuthProvider: React.FC<{ children: React.ReactNode }> = ({ ch
         setTokenExpiresAt(expiresAt);
         localStorage.setItem(AUTH_STORAGE_KEYS.TOKEN, freshToken);
         localStorage.setItem(AUTH_STORAGE_KEYS.EXPIRES_AT, expiresAt.toString());
+        setIsOfflineMode(false);
         localStorage.setItem(AUTH_STORAGE_KEYS.OFFLINE_MODE, 'false');
 
         // Fetch user identity profile
         const profile = await fetchGoogleUserInfo(freshToken);
         setUser(profile);
         localStorage.setItem(AUTH_STORAGE_KEYS.USER, JSON.stringify(profile));
-        setIsOfflineMode(false);
         setIsAuthenticating(false);
 
         // Discover or create Google Sheet
@@ -253,30 +363,16 @@ export const GoogleAuthProvider: React.FC<{ children: React.ReactNode }> = ({ ch
     []
   );
 
-  // Handle redirect callback (?code=... or ?error=...) on page load
+  // Single-use execution of initial redirect result (StrictMode-safe guard)
   useEffect(() => {
-    if (typeof window === 'undefined') return;
-    const searchParams = new URLSearchParams(window.location.search);
-    const code = searchParams.get('code');
-    const error = searchParams.get('error');
-
-    if (error) {
-      setAuthError(
-        error === 'access_denied'
-          ? 'Google Sign-In was cancelled or access was denied.'
-          : `Google Sign-In error: ${error}`
+    if (initialRedirectResult.code && !redeemedCodeSet.has(initialRedirectResult.code)) {
+      redeemedCodeSet.add(initialRedirectResult.code);
+      const exactOrigin = window.location.origin; // Strictly window.location.origin without trailing slash
+      processAuthCode(
+        initialRedirectResult.code,
+        exactOrigin,
+        initialRedirectResult.codeVerifier
       );
-      try {
-        window.history.replaceState(null, '', window.location.pathname);
-      } catch {}
-      return;
-    }
-
-    if (code) {
-      try {
-        window.history.replaceState(null, '', window.location.pathname);
-      } catch {}
-      processAuthCode(code, window.location.origin);
     }
   }, [processAuthCode]);
 
@@ -343,35 +439,44 @@ export const GoogleAuthProvider: React.FC<{ children: React.ReactNode }> = ({ ch
   }, []);
 
   /**
-   * Launch Full Redirect Authorization Code Flow.
-   * Required for mobile browsers, standalone PWAs, or when popups are blocked.
+   * Primary Sign-In Method: Direct Redirect Flow (response_type=code) with PKCE (S256) & CSRF state.
+   * Stores PKCE verifier + state in localStorage with 10-minute expiry (mobile PWA safe).
+   * Strictly matches window.location.origin (no trailing slash).
    */
-  const loginWithRedirect = useCallback(() => {
+  const loginWithRedirect = useCallback(async () => {
     setAuthError(null);
     if (!effectiveClientId) {
       setAuthError('Google Client ID is not configured. Please check VITE_GOOGLE_CLIENT_ID.');
       return;
     }
+
     const redirectUri = window.location.origin;
 
-    if ((window as any).google?.accounts?.oauth2?.initCodeClient) {
-      try {
-        const client = (window as any).google.accounts.oauth2.initCodeClient({
-          client_id: effectiveClientId,
-          scope: OAUTH_SCOPES,
-          ux_mode: 'redirect',
-          redirect_uri: redirectUri,
-          access_type: 'offline',
-          prompt: 'consent',
-        });
-        client.requestCode();
-        return;
-      } catch (err) {
-        console.warn('[TrackWise Auth] GIS redirect call failed, using fallback URL:', err);
+    const state =
+      typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function'
+        ? crypto.randomUUID()
+        : `${Date.now()}_${Math.random().toString(36).slice(2)}`;
+
+    let challenge = '';
+    let verifier = '';
+    try {
+      const pkce = await generatePKCE();
+      if (pkce) {
+        verifier = pkce.verifier;
+        challenge = pkce.challenge;
       }
+    } catch (e) {
+      console.warn('PKCE generation failed:', e);
     }
 
-    // Direct HTTP redirect fallback
+    // Save PKCE session to localStorage with 10-minute expiry
+    const pkceSession: StoredPKCE = {
+      state,
+      verifier,
+      expiresAt: Date.now() + 10 * 60 * 1000,
+    };
+    localStorage.setItem(OAUTH_PKCE_STORAGE_KEY, JSON.stringify(pkceSession));
+
     const params = new URLSearchParams({
       client_id: effectiveClientId,
       redirect_uri: redirectUri,
@@ -379,105 +484,25 @@ export const GoogleAuthProvider: React.FC<{ children: React.ReactNode }> = ({ ch
       scope: OAUTH_SCOPES,
       access_type: 'offline',
       prompt: 'consent',
+      state,
     });
+
+    if (challenge) {
+      params.set('code_challenge', challenge);
+      params.set('code_challenge_method', 'S256');
+    }
+
     window.location.assign(`https://accounts.google.com/o/oauth2/v2/auth?${params.toString()}`);
   }, [effectiveClientId]);
 
-  /**
-   * Launch Google Sign-In:
-   * - Automatically detects mobile browsers & standalone PWAs and defaults to Redirect flow
-   * - On desktop, attempts synchronous popup flow, providing an instant redirect fallback if closed/blocked
-   */
-  const loginWithGoogle = useCallback(
-    async (options?: { forceRedirect?: boolean } | React.MouseEvent) => {
-      setAuthError(null);
-
-      if (!effectiveClientId) {
-        setAuthError('Google Client ID is not configured. Please check VITE_GOOGLE_CLIENT_ID.');
-        return;
-      }
-
-      const forceRedirect = Boolean(options && 'forceRedirect' in options && options.forceRedirect);
-
-      const isMobile =
-        typeof window !== 'undefined' &&
-        (window.matchMedia('(display-mode: standalone)').matches ||
-          /Android|iPhone|iPad|iPod|Opera Mini|IEMobile|WPDesktop/i.test(navigator.userAgent));
-
-      if (forceRedirect || isMobile) {
-        loginWithRedirect();
-        return;
-      }
-
-      setIsAuthenticating(true);
-
-      // Pre-check GIS library
-      if (!(window as any).google?.accounts?.oauth2?.initCodeClient) {
-        try {
-          await loadGIS();
-        } catch {
-          loginWithRedirect();
-          return;
-        }
-      }
-
-      if (!(window as any).google?.accounts?.oauth2?.initCodeClient) {
-        loginWithRedirect();
-        return;
-      }
-
-      try {
-        const client = (window as any).google.accounts.oauth2.initCodeClient({
-          client_id: effectiveClientId,
-          scope: OAUTH_SCOPES,
-          ux_mode: 'popup',
-          access_type: 'offline',
-          prompt: 'consent',
-          callback: async (response: { code?: string; error?: string }) => {
-            if (response.error) {
-              setIsAuthenticating(false);
-              if (response.error === 'access_denied') {
-                setAuthError('Google Sign-In was cancelled or access was denied.');
-              } else {
-                setAuthError(`Google Sign-In error: ${response.error}`);
-              }
-              return;
-            }
-
-            if (!response.code) {
-              setIsAuthenticating(false);
-              setAuthError('No authorization code was returned by Google.');
-              return;
-            }
-
-            await processAuthCode(response.code, 'postmessage');
-          },
-          error_callback: (err: any) => {
-            setIsAuthenticating(false);
-            if (err?.type === 'popup_closed') {
-              setAuthError(
-                'Popup was closed before sign-in completed. If the popup closed automatically, tap "Sign in with Redirect" below.'
-              );
-            } else if (err?.type === 'popup_failed_to_open') {
-              setAuthError('Sign-in popup blocked by browser. Tap "Sign in with Redirect" below.');
-            } else {
-              setAuthError(err?.message || 'Google Sign-In popup failed to open.');
-            }
-          },
-        });
-
-        client.requestCode();
-      } catch (err: any) {
-        setIsAuthenticating(false);
-        setAuthError(err.message || 'Failed to start Google Sign-In.');
-      }
-    },
-    [effectiveClientId, loginWithRedirect, processAuthCode]
-  );
+  // Primary entrypoint is now Direct Redirect
+  const loginWithGoogle = useCallback(() => {
+    loginWithRedirect();
+  }, [loginWithRedirect]);
 
   const reconnectSync = useCallback(() => {
-    loginWithGoogle();
-  }, [loginWithGoogle]);
+    loginWithRedirect();
+  }, [loginWithRedirect]);
 
   const logout = useCallback(async () => {
     try {
@@ -500,6 +525,7 @@ export const GoogleAuthProvider: React.FC<{ children: React.ReactNode }> = ({ ch
     localStorage.removeItem(AUTH_STORAGE_KEYS.OFFLINE_MODE);
     localStorage.removeItem(AUTH_STORAGE_KEYS.SHEET_ID);
     localStorage.removeItem(AUTH_STORAGE_KEYS.SHEET_URL);
+    localStorage.removeItem(OAUTH_PKCE_STORAGE_KEY);
   }, []);
 
   const continueOffline = useCallback(() => {
@@ -547,6 +573,22 @@ export const GoogleAuthProvider: React.FC<{ children: React.ReactNode }> = ({ ch
           localStorage.setItem(AUTH_STORAGE_KEYS.USER, JSON.stringify(profile));
           setIsOfflineMode(false);
           localStorage.setItem(AUTH_STORAGE_KEYS.OFFLINE_MODE, 'false');
+
+          try {
+            setSyncInfo((prev) => ({ ...prev, syncState: 'syncing', errorMessage: undefined }));
+            const sheet = await findOrCreateTrackWiseSheet(freshToken);
+            setSyncInfo((prev) => ({
+              ...prev,
+              spreadsheetId: sheet.spreadsheetId,
+              spreadsheetUrl: sheet.spreadsheetUrl,
+              syncState: 'idle',
+            }));
+            localStorage.setItem(AUTH_STORAGE_KEYS.SHEET_ID, sheet.spreadsheetId);
+            localStorage.setItem(AUTH_STORAGE_KEYS.SHEET_URL, sheet.spreadsheetUrl);
+          } catch (sheetErr) {
+            console.warn('[TrackWise Pairing] Failed to auto-discover sheet:', sheetErr);
+          }
+
           return { success: true };
         }
         return { success: true };
@@ -558,13 +600,7 @@ export const GoogleAuthProvider: React.FC<{ children: React.ReactNode }> = ({ ch
   );
 
   /**
-   * Execute mutex-protected Live-Index Incremental Sync cycle:
-   * 1. Acquires navigator.locks 'trackwise_sheets_sync' mutex.
-   * 2. Pulls remote rows and builds live row index map Map<id, actualSheetRowNumber>.
-   * 3. Deterministically reconciles local + remote per ID (monotonic rev -> updatedAt).
-   * 4. If nothing changed remotely, skips all write calls completely.
-   * 5. If 30-day tombstone purge occurred: values:batchClear + full rewrite.
-   *    Otherwise: updates modified rows via values:batchUpdate and appends brand-new rows via values:append.
+   * Execute mutex-protected Live-Index Incremental Sync cycle
    */
   const performSync = useCallback(
     async (
