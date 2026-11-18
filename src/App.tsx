@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { ExpenseProvider, useExpense } from './context/ExpenseContext';
 import { GoogleAuthProvider, useGoogleAuth } from './context/GoogleAuthContext';
 import { LoginPortal } from './components/auth/LoginPortal';
@@ -13,23 +13,26 @@ import { SettingsView } from './components/settings/SettingsView';
 import { TransactionModal } from './components/modals/TransactionModal';
 import { CsvImportModal } from './components/modals/CsvImportModal';
 import { ExportModal } from './components/modals/ExportModal';
+import { computeSyncFingerprint } from './services/googleSheetsService';
 import { Transaction } from './types';
 import { Plus, WifiOff, AlertTriangle } from 'lucide-react';
 
+const FOCUS_SYNC_THROTTLE_MS = 15_000; // At most once every 15 seconds
+
 const MainApp: React.FC = () => {
-  const { user, isOfflineMode, performSync, isTokenExpired, reconnectSync, pullFromSheet } = useGoogleAuth();
-  const { 
-    isExportModalOpen, 
+  const { user, isOfflineMode, performSync, isTokenExpired, reconnectSync } = useGoogleAuth();
+  const {
+    isExportModalOpen,
     closeExportModal,
-    transactions,
-    budgets,
-    recurring,
+    allTransactions,
+    allBudgets,
+    allRecurring,
     upiBalance,
     cashBalance,
     settings,
     setAllTransactions,
     setAllBudgets,
-    setAllRecurring
+    setAllRecurring,
   } = useExpense();
 
   const [activeTab, setActiveTab] = useState('dashboard');
@@ -37,8 +40,78 @@ const MainApp: React.FC = () => {
   const [isCsvModalOpen, setIsCsvModalOpen] = useState(false);
   const [transactionToEdit, setTransactionToEdit] = useState<Transaction | null>(null);
   const [isOffline, setIsOffline] = useState(typeof navigator !== 'undefined' ? !navigator.onLine : false);
-  const [isInitialPullDone, setIsInitialPullDone] = useState(false);
-  const initialPullAttemptedRef = useRef<string | null>(null);
+  const [isInitialSyncDone, setIsInitialSyncDone] = useState(false);
+
+  const initialSyncAttemptedRef = useRef<string | null>(null);
+  const lastSyncedFingerprintRef = useRef<string | null>(null);
+  const lastFocusSyncAtRef = useRef<number>(0);
+
+  // Always-fresh snapshot ref so async sync triggers never use stale closures
+  const latestDataRef = useRef({
+    allTransactions,
+    allBudgets,
+    allRecurring,
+    upiBalance,
+    cashBalance,
+    currencySymbol: settings.currency.symbol,
+  });
+
+  useEffect(() => {
+    latestDataRef.current = {
+      allTransactions,
+      allBudgets,
+      allRecurring,
+      upiBalance,
+      cashBalance,
+      currencySymbol: settings.currency.symbol,
+    };
+  }, [allTransactions, allBudgets, allRecurring, upiBalance, cashBalance, settings.currency.symbol]);
+
+  /**
+   * Execute a mutex-protected Pull -> Merge -> Push cycle and apply reconciled state
+   * ONLY when the merged result actually differs from current local state.
+   */
+  const runReconciledSync = useCallback(async () => {
+    if (!user || isTokenExpired || !navigator.onLine) return false;
+
+    const snap = latestDataRef.current;
+    const result = await performSync(
+      snap.allTransactions,
+      snap.allBudgets,
+      snap.allRecurring,
+      snap.upiBalance,
+      snap.cashBalance,
+      snap.currencySymbol
+    );
+
+    if (
+      result.success &&
+      result.mergedTransactions &&
+      result.mergedBudgets &&
+      result.mergedRecurring
+    ) {
+      // Record fingerprint BEFORE applying merged state so the debounced auto-sync
+      // effect does not trigger a redundant follow-up push loop.
+      lastSyncedFingerprintRef.current = computeSyncFingerprint(
+        result.mergedTransactions,
+        result.mergedBudgets,
+        result.mergedRecurring
+      );
+
+      if (result.localChanged?.transactions) {
+        setAllTransactions(result.mergedTransactions);
+      }
+      if (result.localChanged?.budgets) {
+        setAllBudgets(result.mergedBudgets);
+      }
+      if (result.localChanged?.recurring) {
+        setAllRecurring(result.mergedRecurring);
+      }
+      return true;
+    }
+
+    return false;
+  }, [user, isTokenExpired, performSync, setAllTransactions, setAllBudgets, setAllRecurring]);
 
   useEffect(() => {
     const handleOnline = () => setIsOffline(false);
@@ -64,91 +137,80 @@ const MainApp: React.FC = () => {
     }
   }, []);
 
-  // Restore cloud expenses on login or when opening on a new domain/device
+  // Initial Pull-Before-Push Reconciliation on login or new device/domain
   useEffect(() => {
-    if (!user || isTokenExpired || !navigator.onLine) return;
-    if (initialPullAttemptedRef.current === user.id) return;
-    initialPullAttemptedRef.current = user.id;
+    if (!user) {
+      initialSyncAttemptedRef.current = null;
+      lastSyncedFingerprintRef.current = null;
+      setIsInitialSyncDone(false);
+      return;
+    }
+    if (isTokenExpired || !navigator.onLine) return;
+    if (initialSyncAttemptedRef.current === user.id) return;
+    initialSyncAttemptedRef.current = user.id;
 
-    pullFromSheet().then((remoteData) => {
-      if (remoteData) {
-        if (remoteData.transactions.length > 0) {
-          if (transactions.length === 0) {
-            setAllTransactions(remoteData.transactions);
-          } else {
-            const localIds = new Set(transactions.map((t) => t.id));
-            const missingRemote = remoteData.transactions.filter((t) => !localIds.has(t.id));
-            if (missingRemote.length > 0) {
-              setAllTransactions([...transactions, ...missingRemote]);
-            }
-          }
-        }
-        if (remoteData.budgets.length > 0 && budgets.length === 0) {
-          setAllBudgets(remoteData.budgets);
-        }
-        if (remoteData.recurring && remoteData.recurring.length > 0) {
-          if (recurring.length === 0) {
-            setAllRecurring(remoteData.recurring);
-          } else {
-            const localIds = new Set(recurring.map((r) => r.id));
-            const missingRemote = remoteData.recurring.filter((r) => !localIds.has(r.id));
-            if (missingRemote.length > 0) {
-              setAllRecurring([...recurring, ...missingRemote]);
-            }
-          }
-        } else if (recurring.length > 0) {
-          // Cloud has 0 recurring bills (e.g. newly created tab): seed cloud with local bills
-          performSync(
-            transactions,
-            budgets,
-            recurring,
-            upiBalance,
-            cashBalance,
-            settings.currency.symbol
-          );
-        }
-      }
-      setIsInitialPullDone(true);
+    runReconciledSync().finally(() => {
+      lastFocusSyncAtRef.current = Date.now();
+      setIsInitialSyncDone(true);
     });
-  }, [user, isTokenExpired, pullFromSheet]);
+  }, [user, isTokenExpired, runReconciledSync]);
 
-  // Auto-Sync Debounced Engine: When local state changes and user is logged in
+  // Auto-Sync Debounced Engine: When local state changes and differs from last synced fingerprint
   useEffect(() => {
     if (!user || isTokenExpired || !navigator.onLine) return;
-    // Prevent an empty local state on a new domain from pushing before cloud data is checked
-    if (!isInitialPullDone && transactions.length === 0 && recurring.length === 0) return;
+    if (!isInitialSyncDone) return;
+
+    const currentFingerprint = computeSyncFingerprint(allTransactions, allBudgets, allRecurring);
+    if (currentFingerprint === lastSyncedFingerprintRef.current) {
+      return;
+    }
 
     const timer = setTimeout(() => {
-      performSync(
-        transactions,
-        budgets,
-        recurring,
-        upiBalance,
-        cashBalance,
-        settings.currency.symbol
-      );
+      runReconciledSync();
     }, 1500);
 
     return () => clearTimeout(timer);
-  }, [transactions, budgets, recurring, user, isTokenExpired, upiBalance, cashBalance, settings.currency.symbol, isInitialPullDone]);
+  }, [allTransactions, allBudgets, allRecurring, user, isTokenExpired, isInitialSyncDone, runReconciledSync]);
 
   // Sync on Reconnecting Online
   useEffect(() => {
     const handleOnlineSync = () => {
       if (user && !isTokenExpired) {
-        performSync(
-          transactions,
-          budgets,
-          recurring,
-          upiBalance,
-          cashBalance,
-          settings.currency.symbol
-        );
+        lastFocusSyncAtRef.current = Date.now();
+        runReconciledSync();
       }
     };
     window.addEventListener('online', handleOnlineSync);
     return () => window.removeEventListener('online', handleOnlineSync);
-  }, [user, isTokenExpired, transactions, budgets, recurring, upiBalance, cashBalance, settings.currency.symbol]);
+  }, [user, isTokenExpired, runReconciledSync]);
+
+  // Throttled Focus / Visibility Sync (at most once every 15 seconds when switching back to app/tab)
+  useEffect(() => {
+    if (!user || isTokenExpired) return;
+
+    const triggerThrottledFocusSync = () => {
+      if (document.visibilityState !== 'visible' || !navigator.onLine) return;
+      const now = Date.now();
+      if (now - lastFocusSyncAtRef.current < FOCUS_SYNC_THROTTLE_MS) {
+        return;
+      }
+      lastFocusSyncAtRef.current = now;
+      runReconciledSync();
+    };
+
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible') {
+        triggerThrottledFocusSync();
+      }
+    };
+
+    window.addEventListener('focus', triggerThrottledFocusSync);
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    return () => {
+      window.removeEventListener('focus', triggerThrottledFocusSync);
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+    };
+  }, [user, isTokenExpired, runReconciledSync]);
 
   // Global Keyboard Shortcuts
   useEffect(() => {
@@ -228,6 +290,7 @@ const MainApp: React.FC = () => {
         }}
         onNavigateToTab={(tab) => setActiveTab(tab)}
         onOpenCsvModal={() => setIsCsvModalOpen(true)}
+        onManualSync={runReconciledSync}
       />
 
       {/* Navigation Sub-bar */}

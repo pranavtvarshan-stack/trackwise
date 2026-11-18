@@ -160,26 +160,27 @@ flowchart TD
     User([User Device / Browser / PWA]) -->|User Interaction| ReactApp[TrackWise Pro React Application]
     
     subgraph ClientLayer [Client Execution Context]
-        ReactApp --> StateEngine[ExpenseContext State Machine]
+        ReactApp --> StateEngine[ExpenseContext State Machine\nActive Views + Tombstone Store]
         StateEngine --> Calculation[Financial Engine: Exact Balances & Stats]
-        StateEngine -->|Synchronous Instant Write| LocalStore[(Browser LocalStorage\ntrackwise_*)]
+        StateEngine -->|Synchronous Write with rev + Tombstones| LocalStore[(Browser LocalStorage\ntrackwise_*)]
         
         SW[Service Worker sw.js v3] -.->|Caches Static Assets Only\nNetwork-First HTML & Google Bypass| ReactApp
     end
 
-    subgraph SyncEngine [Background Sync & Redirect Auth Engine]
+    subgraph SyncEngine [Hardened Multi-Device Sync & Redirect Auth Engine]
         ReactApp --> AuthContext[GoogleAuthContext]
         AuthContext -->|Full-Page Redirect + CSRF State| OAuthEndpoint[Google OAuth 2.0\n/o/oauth2/v2/auth]
         OAuthEndpoint -->|Redirect #access_token Hash| HashParser[Module-Level Hash Consumer\nScrubs URL via replaceState]
         HashParser --> AuthContext
-        StateEngine -.->|1.5s Debounced Trigger| SyncDispatch[Auto-Sync Controller]
-        SyncDispatch --> GoogleSheetsClient[googleSheetsService.ts]
+        StateEngine -.->|1.5s Debounced / 15s Focus / Online Trigger| Mutex[Web Locks Mutex\ntrackwise_sheets_sync]
+        Mutex --> MergeEngine[Pull-Before-Push Merge Engine\nrev -> updatedAt -> 30d Prune]
+        MergeEngine --> GoogleSheetsClient[googleSheetsService.ts]
     end
 
     subgraph GoogleCloud [Google Cloud Platform Services]
         AuthContext -->|Profile Lookup| UserInfoAPI[Google UserInfo v3 API]
         GoogleSheetsClient -->|Drive API v3: Find Spreadsheet| DriveAPI[Google Drive REST API]
-        GoogleSheetsClient -->|Sheets API v4: Create, batchGet, batchUpdate| SheetsAPI[Google Sheets REST API]
+        GoogleSheetsClient -->|Sheets API v4: batchGet, batchClear, batchUpdate| SheetsAPI[Google Sheets REST API]
         DriveAPI --> TargetSheet[TrackWise Pro Spreadsheet\n6 Managed Sheets]
         SheetsAPI --> TargetSheet
     end
@@ -200,18 +201,23 @@ flowchart TD
    - It validates the CSRF `state`, persists `trackwise_google_token` and `trackwise_google_expires_at` to `localStorage`, clears `trackwise_offline_mode`, and immediately removes the token from the URL bar using `window.history.replaceState`.
    - `GoogleAuthProvider`'s effect (keyed on `[accessToken]`) fetches the Google profile via `fetchGoogleUserInfo()`, unlocks the Dashboard immediately, and resolves/creates the spreadsheet in the background.
 
-3. **Spreadsheet Discovery & Automatic Schema Upgrade**:
-   - `findOrCreateTrackWiseSheet()` queries Google Drive API v3 for `name='TrackWise Pro - Personal Finance' and mimeType='application/vnd.google-apps.spreadsheet' and trashed=false`.
-   - If absent, it creates the 6-tab workbook via Sheets API v4.
-   - If present, `ensureSheetsExist()` inspects existing tab titles and automatically adds any missing tabs (e.g., `'Recurring Bills'`) via `addSheet`.
+3. **Multi-Tab Mutex & Atomic Pull-Before-Push Reconciliation**:
+   - Every sync (`performSync`) acquires a cross-tab mutex via the browser **Web Locks API** (`navigator.locks.request('trackwise_sheets_sync', ...)`), with an in-memory promise-queue fallback lock when `navigator.locks` is unavailable—preventing two open tabs on the same device from executing overlapping sync cycles.
+   - Inside the lock, `performSync` **always pulls remote rows first** (`values:batchGet` with URL-encoded ranges) before writing anything.
+   - Local and remote collections (`Transactions`, `Budgets`, `Recurring Bills`) are reconciled per `id` via `mergeEntityCollections()`:
+     1. **Single-side ID**: Kept unless `isDeleted === true` and `updatedAt` is older than 30 days.
+     2. **Dual-side ID (Monotonic Revision Precedence)**: The record with the higher `rev` wins (protecting against device system clock drift).
+     3. **Equal `rev` Tie-Breaker**: When two devices edit the same record independently offline at the same `rev`, the more recent `updatedAt` ISO timestamp wins.
+     4. **30-Day Tombstone Pruning**: Soft-deleted records older than 30 days are automatically purged from both local state and Google Sheets.
+   - Live UPI and Cash wallet balances are recomputed directly from the merged active transactions (`computeSplitWalletBalances`) so the `Accounts` tab always matches reconciled state.
 
-4. **Cloud Pull (Cross-Device / Cross-Domain Restore)**:
-   - On login or when opening on a new domain/device, `App.tsx` tracks `initialPullAttemptedRef` and blocks auto-push (`isInitialPullDone`) until cloud data is checked first—preventing an empty local state from overwriting cloud records.
-   - `pullDataFromSheet()` executes a single `values:batchGet` request with URL-encoded sheet ranges (`encodeURIComponent("'Recurring Bills'!A2:K")`) to fetch `Transactions`, `Budgets`, and `Recurring Bills`, merging any missing cloud entries into local state.
+4. **Trailing Ghost Row Elimination & Atomic Push**:
+   - Immediately before writing, `pushDataToSheet()` calls `values:batchClear` across all 6 data ranges (`Transactions!A2:L`, `'UPI Expenses'!A2:H`, `'Cash Expenses'!A2:H`, `Budgets!A2:I`, `Accounts!A2:D`, `'Recurring Bills'!A2:N`)—preserving row-1 headers and eliminating leftover ghost rows when datasets shrink.
+   - It then writes upgraded headers + reconciled rows atomically via `values:batchUpdate` (`USER_ENTERED`), using dynamic `=SUMIFS` formulas in `UPI Expenses` and `Cash Expenses`.
 
-5. **Optimistic Local Update & Debounced Push**:
-   - Mutations immediately update React state and `localStorage`.
-   - `App.tsx` debounces cloud pushes by **1,500ms** (`performSync`), bundling all 6 tabs (including row-1 headers to avoid empty `values: []` Protobuf 400 errors) into a single atomic `values:batchUpdate` (`USER_ENTERED`).
+5. **Loop-Free Local State Updates & Throttled Focus Sync**:
+   - `App.tsx` updates local React state & `localStorage` **only** when `localChanged.*` indicates the merged collection differs from local state, recording a canonical data fingerprint (`computeSyncFingerprint`) beforehand to prevent infinite re-render/sync loops.
+   - Sync triggers automatically on initial login, 1.5s debounced local edits, `online` reconnects, manual **"Sync Now"**, and throttled `visibilitychange` / `window.focus` events (at most once every 15 seconds when switching back to the app/tab).
 
 ---
 
@@ -220,13 +226,15 @@ flowchart TD
 ### 5.1 Browser Storage Keys (`localStorage` & `sessionStorage`)
 
 #### Financial & App State Keys (`src/utils/storage.ts` & `index.html`)
+*Note: `ExpenseContext.tsx` persists full arrays (including soft-delete tombstones) under these keys and exposes active-only filtered views (`!isDeleted`) to all UI components while exposing full arrays (`allTransactions`, `allBudgets`, `allRecurring`) to the sync engine.*
+
 | Storage | Key Name | Type | Description |
 | :--- | :--- | :--- | :--- |
-| `localStorage` | `trackwise_transactions_v1` | `Transaction[]` | Complete array of historical income and expense transactions |
+| `localStorage` | `trackwise_transactions_v1` | `Transaction[]` | Full transaction ledger including `rev`, `updatedAt`, and soft-delete tombstones |
 | `localStorage` | `trackwise_categories_v1` | `Category[]` | Custom and default category definitions with icons and colors |
 | `localStorage` | `trackwise_payment_methods_v1` | `PaymentMethodItem[]` | Configured payment methods (UPI, Cash, Credit Card, Bank, etc.) |
-| `localStorage` | `trackwise_budgets_v1` | `Budget[]` | Category budget caps, period definitions, and alert triggers |
-| `localStorage` | `trackwise_recurring_v1` | `RecurringTransaction[]` | Configured subscriptions, bills, frequencies, and due dates |
+| `localStorage` | `trackwise_budgets_v1` | `Budget[]` | Category budget caps including `rev`, `updatedAt`, and soft-delete tombstones |
+| `localStorage` | `trackwise_recurring_v1` | `RecurringTransaction[]` | Subscriptions & bills including `rev`, `updatedAt`, and soft-delete tombstones |
 | `localStorage` | `trackwise_settings_v1` | `UserSettings` | Currency formatting, notifications, and app preferences |
 | `localStorage` | `trackwise_is_initialized_v1` | `'true'` | Guard flag preventing demo data from re-seeding after user wipes data |
 | `localStorage` | `trackwise_theme` | `'dark' \| 'light'` | Persisted theme preference read before React mounts for zero-flash rendering |
@@ -246,71 +254,76 @@ flowchart TD
 
 ### 5.2 Google Sheets 6-Tab Workbook Schema
 
-The application creates and maintains a dedicated Google Sheets workbook entitled **`TrackWise Pro - Personal Finance`**.
+The application creates and maintains a dedicated Google Sheets workbook entitled **`TrackWise Pro - Personal Finance`**. Missing/empty `Rev` cells on legacy sheets automatically default to `1`.
 
-#### Sheet 1: `Transactions`
-*Stores every historical transaction record.*
+#### Sheet 1: `Transactions` (`A1:L`, cleared on `A2:L`)
+*Stores every historical transaction record including soft-delete tombstones and monotonic revision numbers.*
 | Col | Field Name | Type | Description / Example |
 | :--- | :--- | :--- | :--- |
-| **A** | ID | `string` | Unique identifier (e.g., `tx_1731600000000_abc`) |
+| **A** | ID | `string` | Unique identifier (UUID or `tx_*`) |
 | **B** | Date | `string` | ISO 8601 Date (`YYYY-MM-DD`) |
 | **C** | Title | `string` | Transaction description (e.g., "Grocery Shopping") |
 | **D** | Type | `string` | `expense` \| `income` |
-| **E** | Category | `string` | Category ID (e.g., `cat_groceries`) |
+| **E** | Category ID | `string` | Category ID (e.g., `cat_groceries`) |
 | **F** | Amount | `number` | Monetary value with full decimal precision (`450.50`) |
 | **G** | Payment Method | `string` | `UPI` \| `Cash` \| `Credit Card` \| `Debit Card` \| `Net Banking` |
 | **H** | Notes | `string` | Optional descriptive context |
-| **I** | Tags | `string` | Comma-separated tags (e.g., `"food, weekend"`) |
+| **I** | Tags | `string` | Semicolon-separated tags (`"food;weekend"`) |
 | **J** | Updated At | `string` | ISO timestamp of last modification |
-| **K** | Is Deleted | `boolean` | Soft-delete flag (`FALSE`) |
+| **K** | Is Deleted | `boolean` | Soft-delete tombstone flag (`FALSE` / `TRUE`) |
+| **L** | Rev | `number` | Monotonic revision counter (`1`, `2`, `3`...) |
 
-#### Sheet 2: `UPI Expenses`
-*Auto-filtered view containing only expenses paid via UPI, plus dynamic summary totals.*
-- **Header (Row 1)**: `Date`, `Title`, `Category`, `Amount`, `Notes`, `Tags`, `Updated At`
-- **Rows 2..N**: All expense records where `paymentMethod === 'UPI'`
-- **Footer Row**: `=SUM(D2:D[N])` labelled **"TOTAL UPI EXPENSES"**
+#### Sheet 2: `UPI Expenses` (`A1:G`, cleared on `A2:H`)
+*Auto-filtered active view containing only non-deleted UPI expenses, with a dynamic `=SUMIFS` total.*
+- **Header (Row 1)**: `Date`, `Title`, `Category ID`, `Amount`, `Notes`, `Tags`, `Updated At`
+- **Rows 2..N**: Active expense records where `isDeleted === false` and `paymentMethod === 'UPI'`
+- **Footer Row**: Labelled **"TOTAL UPI EXPENSES"** with dynamic formula:
+  `=SUMIFS(Transactions!F2:F, Transactions!D2:D, "expense", Transactions!G2:G, "UPI", Transactions!K2:K, FALSE)`
 
-#### Sheet 3: `Cash Expenses`
-*Auto-filtered view containing only cash expense transactions, plus dynamic summary totals.*
-- **Header (Row 1)**: `Date`, `Title`, `Category`, `Amount`, `Notes`, `Tags`, `Updated At`
-- **Rows 2..N**: All expense records where `paymentMethod === 'Cash'`
-- **Footer Row**: `=SUM(D2:D[N])` labelled **"TOTAL CASH EXPENSES"**
+#### Sheet 3: `Cash Expenses` (`A1:G`, cleared on `A2:H`)
+*Auto-filtered active view containing only non-deleted Liquid Cash expenses, with a dynamic `=SUMIFS` total.*
+- **Header (Row 1)**: `Date`, `Title`, `Category ID`, `Amount`, `Notes`, `Tags`, `Updated At`
+- **Rows 2..N**: Active expense records where `isDeleted === false` and `paymentMethod === 'Cash'`
+- **Footer Row**: Labelled **"TOTAL CASH EXPENSES"** with dynamic formula:
+  `=SUMIFS(Transactions!F2:F, Transactions!D2:D, "expense", Transactions!G2:G, "Cash", Transactions!K2:K, FALSE)`
 
-#### Sheet 4: `Budgets`
-*Configured monthly spending limits and alert thresholds.*
+#### Sheet 4: `Budgets` (`A1:G`, cleared on `A2:I`)
+*Configured monthly spending limits, alert thresholds, tombstones, and revisions.*
 | Col | Field Name | Type | Description / Example |
 | :--- | :--- | :--- | :--- |
 | **A** | ID | `string` | Budget record ID |
-| **B** | Category | `string` | Category identifier |
-| **C** | Limit Amount | `number` | Monthly budget ceiling |
-| **D** | Period | `string` | `monthly` \| `yearly` |
-| **E** | Alert Threshold | `number` | Percentage warning threshold (e.g., `80`) |
-| **F** | Is Active | `boolean` | Enabled status (`TRUE` / `FALSE`) |
-| **G** | Current Spend | `number` | Dynamic current period expenditure |
-| **H** | Updated At | `string` | ISO timestamp |
+| **B** | Category ID | `string` | Category identifier |
+| **C** | Monthly Limit | `number` | Monthly budget ceiling |
+| **D** | Alert Threshold | `number` | Percentage warning threshold (e.g., `80`) |
+| **E** | Updated At | `string` | ISO timestamp |
+| **F** | Is Deleted | `boolean` | Soft-delete tombstone flag (`FALSE` / `TRUE`) |
+| **G** | Rev | `number` | Monotonic revision counter (`1`, `2`, `3`...) |
 
-#### Sheet 5: `Accounts`
-*Live account summary providing immediate balance reconciliation.*
-- **Header (Row 1)**: `Account Name`, `Current Balance`, `Currency`, `Last Updated`
-- **Row 2**: `UPI Account`, `[Calculated Net UPI Balance]`, `INR`, `[ISO Timestamp]`
-- **Row 3**: `Liquid Cash`, `[Calculated Net Cash Balance]`, `INR`, `[ISO Timestamp]`
-- **Row 4**: `Total Net Balance`, `[Total Income - Total Expenses]`, `INR`, `[ISO Timestamp]`
+#### Sheet 5: `Accounts` (`A1:D`, cleared on `A2:D`)
+*Live account summary recomputed directly from merged active transactions.*
+- **Header (Row 1)**: `Wallet / Account`, `Live Balance`, `Currency`, `Last Synced (UTC)`
+- **Row 2**: `UPI / Online Wallet`, `[Reconciled Net UPI Balance]`, `₹`, `[ISO Timestamp]`
+- **Row 3**: `Liquid Cash Wallet`, `[Reconciled Net Cash Balance]`, `₹`, `[ISO Timestamp]`
+- **Row 4**: `Total Net Balance`, `[UPI Balance + Cash Balance]`, `₹`, `[ISO Timestamp]`
 
-#### Sheet 6: `Recurring Bills`
-*Subscription tracker and repeating bill definitions.*
+#### Sheet 6: `Recurring Bills` (`A1:N`, cleared on `A2:N`)
+*Subscription tracker and repeating bill definitions with monotonic revision tracking and tombstones.*
 | Col | Field Name | Type | Description / Example |
 | :--- | :--- | :--- | :--- |
 | **A** | ID | `string` | Unique bill identifier |
 | **B** | Title | `string` | Subscription name (e.g., "Netflix Premium") |
 | **C** | Amount | `number` | Recurring cost with decimal precision (`649.00`) |
-| **D** | Category | `string` | Category identifier (`cat_entertainment`) |
-| **E** | Payment Method | `string` | Assigned payment method |
-| **F** | Frequency | `string` | `monthly` \| `quarterly` \| `yearly` \| `weekly` |
-| **G** | Due Date | `string` | ISO due date |
-| **H** | Active | `boolean` | `TRUE` / `FALSE` |
-| **I** | Notes | `string` | Notes/Reminders |
-| **J** | Last Processed | `string` | Date of last generation or `""` |
-| **K** | Updated At | `string` | ISO timestamp of modification |
+| **D** | Type | `string` | `expense` \| `income` |
+| **E** | Category ID | `string` | Category identifier (`cat_utilities`) |
+| **F** | Payment Method | `string` | Assigned payment method (`UPI`, `Cash`, etc.) |
+| **G** | Frequency | `string` | `daily` \| `weekly` \| `monthly` \| `yearly` |
+| **H** | Next Due Date | `string` | ISO due date (`YYYY-MM-DD`) |
+| **I** | Start Date | `string` | ISO start date (`YYYY-MM-DD`) |
+| **J** | Active | `boolean` | `TRUE` / `FALSE` |
+| **K** | Notes | `string` | Optional notes/reminders |
+| **L** | Rev | `number` | Monotonic revision counter (`1`, `2`, `3`...) |
+| **M** | Updated At | `string` | ISO timestamp of last modification |
+| **N** | Is Deleted | `boolean` | Soft-delete tombstone flag (`FALSE` / `TRUE`) |
 
 ---
 
@@ -446,7 +459,7 @@ npm run build
 Emitted `/dist` bundles:
 - `dist/index.html` (~9.9 kB)
 - `dist/assets/index-[hash].css` (~63.6 kB)
-- `dist/assets/index-[hash].js` (~231.5 kB)
+- `dist/assets/index-[hash].js` (~238.3 kB)
 - `dist/assets/vendor-[hash].js` (~252.7 kB)
 - `dist/assets/vendor-charts-[hash].js` (~332.3 kB)
 - `dist/assets/vendor-icons-[hash].js` (~780.1 kB)
@@ -468,12 +481,16 @@ Structured for zero-configuration continuous deployment on [Vercel](https://verc
 ### 8.1 Completed Milestones
 - [x] Strictly typed React 18 + TypeScript financial state engine with LocalStorage persistence.
 - [x] Popup-free **Google OAuth 2.0 Direct Redirect Flow** with CSRF `state` verification, StrictMode-safe hash parsing, and automatic URL token scrubbing.
-- [x] Dedicated 6-Sheet Google Spreadsheet synchronization (`Transactions`, `UPI Expenses`, `Cash Expenses`, `Budgets`, `Accounts`, `Recurring Bills`) with URL-encoded ranges and automatic sheet provisioning.
-- [x] Cross-domain/cross-device cloud restore safeguard preventing empty local state from overwriting cloud records on initial load.
+- [x] Hardened **Multi-Device Pull-Before-Push Sync Engine**:
+  - Monotonic `rev` revision counters + `updatedAt` tie-breakers (immune to device clock drift).
+  - Soft-delete tombstones (`isDeleted: true`) preventing deleted rows from resurrecting across devices, with automatic 30-day tombstone pruning.
+  - Cross-tab **Web Locks API** mutex (`trackwise_sheets_sync`) with in-memory fallback lock.
+  - Throttled `visibilitychange` / `window.focus` sync (at most once every 15 seconds) and canonical fingerprint anti-loop protection.
+- [x] Dedicated 6-Sheet Google Spreadsheet synchronization (`Transactions`, `UPI Expenses`, `Cash Expenses`, `Budgets`, `Accounts`, `Recurring Bills`) with explicit `values:batchClear` trailing ghost-row cleanup and dynamic `=SUMIFS` formulas.
 - [x] Decimal-accurate UPI & Cash balances with non-overlapping vertically stacked pills and expandable detail cards across mobile and desktop.
 - [x] Resilient Google profile avatars (`referrerPolicy="no-referrer"` + `onError` initial-badge fallback).
 - [x] Service Worker v3 (`trackwise-v3`) with network-first HTML delivery, Google domain bypass, and safe response cloning.
-- [x] Clean data wipe guard (`trackwise_is_initialized_v1`) preventing sample data re-seeding after clearing.
+- [x] Clean data wipe propagation (soft-deletes active rows + `trackwise_is_initialized_v1` guard).
 
 ### 8.2 Known Gaps & Technical Considerations
 1. **1-Hour OAuth Access Token Expiry (Implicit Flow Limitation)**:
@@ -482,15 +499,11 @@ Structured for zero-configuration continuous deployment on [Vercel](https://verc
    - *Future Option*: Migrate to Authorization Code Flow + PKCE with a lightweight serverless token-refresh endpoint (e.g. Vercel Edge Function) for indefinite background sessions.
 2. **Legacy GIS Script Tag in `index.html`**:
    - `index.html` still includes `<script src="https://accounts.google.com/gsi/client" async defer></script>` from the previous popup implementation. It is harmless, but can be removed to eliminate one unnecessary third-party script download.
-3. **Concurrent Offline Conflict Resolution**:
-   - *Current Behavior*: Cloud pulls merge missing IDs from remote sheets, while debounced pushes overwrite remote rows with local state ("Last Push Wins").
-   - *Improvement*: Compare per-record `updatedAt` timestamps during merge to reconcile simultaneous edits made offline across two devices.
-4. **Google OAuth App Verification (Production Publishing)**:
+3. **Google OAuth App Verification (Production Publishing)**:
    - While the GCP OAuth Consent Screen remains in **Testing** mode, only manually listed Test Users can sign in. Publishing the app (or completing Google's sensitive-scope verification for `spreadsheets`/`drive.file`) is required for unrestricted public onboarding.
 
 ### 8.3 Recommended Next Steps & Roadmap
 - **Remove Unused GIS Script**: Clean up the unused `accounts.google.com/gsi/client` script tag in `index.html`.
-- **Timestamp-Based 3-Way Sync Merge**: Reconcile concurrent offline edits across devices using `updatedAt` + `isDeleted` tombstones.
 - **Multi-Currency & FX Conversion**: Support foreign currency transactions with automatic conversion to the user's base currency.
 - **Biometric App Lock (WebAuthn)**: Optional device PIN / fingerprint lock for enhanced local privacy on shared devices.
 - **Automated PDF Monthly Statements**: Export formatted monthly financial reports and tax-ready category summaries.

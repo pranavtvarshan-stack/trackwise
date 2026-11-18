@@ -21,9 +21,10 @@ interface HeaderProps {
   onOpenAddModal: () => void;
   onNavigateToTab: (tab: string) => void;
   onOpenCsvModal: () => void;
+  onManualSync?: () => Promise<boolean>;
 }
 
-export const Header: React.FC<HeaderProps> = ({ onOpenAddModal, onNavigateToTab, onOpenCsvModal }) => {
+export const Header: React.FC<HeaderProps> = ({ onOpenAddModal, onNavigateToTab, onOpenCsvModal, onManualSync }) => {
   const { 
     recurring, 
     exportJSON, 
@@ -31,8 +32,9 @@ export const Header: React.FC<HeaderProps> = ({ onOpenAddModal, onNavigateToTab,
     importJSON,
     isDark,
     toggleTheme,
-    transactions,
-    budgets,
+    allTransactions,
+    allBudgets,
+    allRecurring,
     upiBalance,
     cashBalance,
     settings,
@@ -48,8 +50,7 @@ export const Header: React.FC<HeaderProps> = ({ onOpenAddModal, onNavigateToTab,
     isTokenExpired,
     loginWithGoogle,
     logout,
-    performSync,
-    pullFromSheet
+    performSync
   } = useGoogleAuth();
 
   const [showExportMenu, setShowExportMenu] = useState(false);
@@ -91,51 +92,29 @@ export const Header: React.FC<HeaderProps> = ({ onOpenAddModal, onNavigateToTab,
   const handleManualSync = async () => {
     setManualSyncing(true);
     try {
-      const remote = await pullFromSheet();
-      let currentTransactions = transactions;
-      let currentBudgets = budgets;
-      let currentRecurring = recurring;
-      if (remote) {
-        if (remote.transactions.length > 0) {
-          if (transactions.length === 0) {
-            currentTransactions = remote.transactions;
-            setAllTransactions(remote.transactions);
-          } else {
-            const localIds = new Set(transactions.map((t) => t.id));
-            const missing = remote.transactions.filter((t) => !localIds.has(t.id));
-            if (missing.length > 0) {
-              currentTransactions = [...transactions, ...missing];
-              setAllTransactions(currentTransactions);
-            }
+      if (onManualSync) {
+        await onManualSync();
+      } else {
+        const result = await performSync(
+          allTransactions,
+          allBudgets,
+          allRecurring,
+          upiBalance,
+          cashBalance,
+          settings.currency.symbol
+        );
+        if (result.success) {
+          if (result.localChanged?.transactions && result.mergedTransactions) {
+            setAllTransactions(result.mergedTransactions);
           }
-        }
-        if (remote.budgets.length > 0 && budgets.length === 0) {
-          currentBudgets = remote.budgets;
-          setAllBudgets(remote.budgets);
-        }
-        if (remote.recurring && remote.recurring.length > 0) {
-          if (recurring.length === 0) {
-            currentRecurring = remote.recurring;
-            setAllRecurring(remote.recurring);
-          } else {
-            const localIds = new Set(recurring.map((r) => r.id));
-            const missing = remote.recurring.filter((r) => !localIds.has(r.id));
-            if (missing.length > 0) {
-              currentRecurring = [...recurring, ...missing];
-              setAllRecurring(currentRecurring);
-            }
+          if (result.localChanged?.budgets && result.mergedBudgets) {
+            setAllBudgets(result.mergedBudgets);
+          }
+          if (result.localChanged?.recurring && result.mergedRecurring) {
+            setAllRecurring(result.mergedRecurring);
           }
         }
       }
-
-      await performSync(
-        currentTransactions,
-        currentBudgets,
-        currentRecurring,
-        upiBalance,
-        cashBalance,
-        settings.currency.symbol
-      );
     } catch (err) {
       console.error('Manual sync failed:', err);
     } finally {

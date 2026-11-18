@@ -33,6 +33,7 @@ export interface Transaction {
   createdAt: string;
   updatedAt?: string;
   isDeleted?: boolean;
+  rev?: number;
   syncStatus?: 'pending' | 'synced';
 }
 
@@ -43,6 +44,7 @@ export interface Budget {
   alertThresholdPercentage: number; // e.g. 80
   updatedAt?: string;
   isDeleted?: boolean;
+  rev?: number;
   syncStatus?: 'pending' | 'synced';
 }
 
@@ -76,6 +78,22 @@ export interface RecurringTransaction {
   startDate: string;
   active: boolean;
   notes?: string;
+  updatedAt?: string;
+  isDeleted?: boolean;
+  rev?: number;
+  syncStatus?: 'pending' | 'synced';
+}
+
+export interface SyncResult {
+  success: boolean;
+  mergedTransactions?: Transaction[];
+  mergedBudgets?: Budget[];
+  mergedRecurring?: RecurringTransaction[];
+  localChanged?: {
+    transactions: boolean;
+    budgets: boolean;
+    recurring: boolean;
+  };
 }
 
 export interface Currency {

@@ -27,13 +27,22 @@ const STORAGE_KEYS = {
   INITIALIZED: 'trackwise_is_initialized_v1',
 };
 
+const normalizeRev = (rev: unknown): number => {
+  const num = typeof rev === 'number' ? rev : parseInt(String(rev ?? ''), 10);
+  return Number.isFinite(num) && num >= 1 ? Math.floor(num) : 1;
+};
+
 export const getStoredTransactions = (): Transaction[] => {
   const isInitialized = localStorage.getItem(STORAGE_KEYS.INITIALIZED);
   const data = localStorage.getItem(STORAGE_KEYS.TRANSACTIONS);
   if (!data && !isInitialized) {
+    const now = new Date().toISOString();
     const sample = generateSampleTransactions().map(tx => ({
       ...tx,
-      paymentMethod: normalizePaymentMethod(tx.paymentMethod)
+      paymentMethod: normalizePaymentMethod(tx.paymentMethod),
+      rev: 1,
+      updatedAt: tx.updatedAt || tx.createdAt || now,
+      isDeleted: false,
     }));
     localStorage.setItem(STORAGE_KEYS.INITIALIZED, 'true');
     localStorage.setItem(STORAGE_KEYS.TRANSACTIONS, JSON.stringify(sample));
@@ -46,7 +55,10 @@ export const getStoredTransactions = (): Transaction[] => {
     const parsed: Transaction[] = JSON.parse(data);
     return Array.isArray(parsed) ? parsed.map(tx => ({
       ...tx,
-      paymentMethod: normalizePaymentMethod(tx.paymentMethod)
+      paymentMethod: normalizePaymentMethod(tx.paymentMethod),
+      rev: normalizeRev(tx.rev),
+      updatedAt: tx.updatedAt || tx.createdAt || new Date(0).toISOString(),
+      isDeleted: Boolean(tx.isDeleted),
     })) : [];
   } catch (e) {
     console.error('Failed to parse transactions', e);
@@ -96,14 +108,29 @@ export const getStoredBudgets = (): Budget[] => {
   const isInitialized = localStorage.getItem(STORAGE_KEYS.INITIALIZED);
   const data = localStorage.getItem(STORAGE_KEYS.BUDGETS);
   if (!data && !isInitialized) {
-    localStorage.setItem(STORAGE_KEYS.BUDGETS, JSON.stringify(INITIAL_BUDGETS));
-    return INITIAL_BUDGETS;
+    const now = new Date().toISOString();
+    const seeded = INITIAL_BUDGETS.map(b => ({
+      ...b,
+      rev: 1,
+      updatedAt: b.updatedAt || now,
+      isDeleted: false,
+    }));
+    localStorage.setItem(STORAGE_KEYS.BUDGETS, JSON.stringify(seeded));
+    return seeded;
   }
   if (!data) {
     return [];
   }
   try {
-    return JSON.parse(data);
+    const parsed: Budget[] = JSON.parse(data);
+    return Array.isArray(parsed)
+      ? parsed.map(b => ({
+          ...b,
+          rev: normalizeRev(b.rev),
+          updatedAt: b.updatedAt || new Date(0).toISOString(),
+          isDeleted: Boolean(b.isDeleted),
+        }))
+      : [];
   } catch {
     return [];
   }
@@ -117,9 +144,13 @@ export const getStoredRecurring = (): RecurringTransaction[] => {
   const isInitialized = localStorage.getItem(STORAGE_KEYS.INITIALIZED);
   const data = localStorage.getItem(STORAGE_KEYS.RECURRING);
   if (!data && !isInitialized) {
+    const now = new Date().toISOString();
     const sample = INITIAL_RECURRING.map(rec => ({
       ...rec,
-      paymentMethod: normalizePaymentMethod(rec.paymentMethod)
+      paymentMethod: normalizePaymentMethod(rec.paymentMethod),
+      rev: 1,
+      updatedAt: rec.updatedAt || now,
+      isDeleted: false,
     }));
     localStorage.setItem(STORAGE_KEYS.RECURRING, JSON.stringify(sample));
     return sample;
@@ -129,10 +160,15 @@ export const getStoredRecurring = (): RecurringTransaction[] => {
   }
   try {
     const parsed: RecurringTransaction[] = JSON.parse(data);
-    return Array.isArray(parsed) ? parsed.map(rec => ({
-      ...rec,
-      paymentMethod: normalizePaymentMethod(rec.paymentMethod)
-    })) : [];
+    return Array.isArray(parsed)
+      ? parsed.map(rec => ({
+          ...rec,
+          paymentMethod: normalizePaymentMethod(rec.paymentMethod),
+          rev: normalizeRev(rec.rev),
+          updatedAt: rec.updatedAt || new Date(0).toISOString(),
+          isDeleted: Boolean(rec.isDeleted),
+        }))
+      : [];
   } catch {
     return [];
   }
@@ -173,20 +209,40 @@ export const saveSettings = (settings: UserSettings): void => {
 };
 
 export const resetAllDataToDefault = () => {
-  const sample = generateSampleTransactions();
+  const now = new Date().toISOString();
+  const sample = generateSampleTransactions().map(tx => ({
+    ...tx,
+    paymentMethod: normalizePaymentMethod(tx.paymentMethod),
+    rev: 1,
+    updatedAt: tx.updatedAt || tx.createdAt || now,
+    isDeleted: false,
+  }));
+  const budgets = INITIAL_BUDGETS.map(b => ({
+    ...b,
+    rev: 1,
+    updatedAt: b.updatedAt || now,
+    isDeleted: false,
+  }));
+  const recurring = INITIAL_RECURRING.map(r => ({
+    ...r,
+    paymentMethod: normalizePaymentMethod(r.paymentMethod),
+    rev: 1,
+    updatedAt: r.updatedAt || now,
+    isDeleted: false,
+  }));
   localStorage.setItem(STORAGE_KEYS.INITIALIZED, 'true');
   localStorage.setItem(STORAGE_KEYS.TRANSACTIONS, JSON.stringify(sample));
   localStorage.setItem(STORAGE_KEYS.CATEGORIES, JSON.stringify(DEFAULT_CATEGORIES));
   localStorage.setItem(STORAGE_KEYS.PAYMENT_METHODS, JSON.stringify(DEFAULT_PAYMENT_METHODS));
-  localStorage.setItem(STORAGE_KEYS.BUDGETS, JSON.stringify(INITIAL_BUDGETS));
-  localStorage.setItem(STORAGE_KEYS.RECURRING, JSON.stringify(INITIAL_RECURRING));
+  localStorage.setItem(STORAGE_KEYS.BUDGETS, JSON.stringify(budgets));
+  localStorage.setItem(STORAGE_KEYS.RECURRING, JSON.stringify(recurring));
   localStorage.setItem(STORAGE_KEYS.SETTINGS, JSON.stringify(DEFAULT_USER_SETTINGS));
   return {
     transactions: sample,
     categories: DEFAULT_CATEGORIES,
     paymentMethods: DEFAULT_PAYMENT_METHODS,
-    budgets: INITIAL_BUDGETS,
-    recurring: INITIAL_RECURRING,
+    budgets,
+    recurring,
     settings: DEFAULT_USER_SETTINGS,
   };
 };
@@ -203,16 +259,16 @@ export const clearAllData = () => {
   };
 };
 
-// Export to JSON string
+// Export to JSON string (active records only)
 export const exportDataAsJSON = () => {
   const exportPayload = {
     version: '1.0',
     exportDate: new Date().toISOString(),
-    transactions: getStoredTransactions(),
+    transactions: getStoredTransactions().filter(t => !t.isDeleted),
     categories: getStoredCategories(),
     paymentMethods: getStoredPaymentMethods(),
-    budgets: getStoredBudgets(),
-    recurring: getStoredRecurring(),
+    budgets: getStoredBudgets().filter(b => !b.isDeleted),
+    recurring: getStoredRecurring().filter(r => !r.isDeleted),
     settings: getStoredSettings(),
   };
   return JSON.stringify(exportPayload, null, 2);

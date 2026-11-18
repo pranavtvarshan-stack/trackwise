@@ -47,7 +47,7 @@ import {
 import { normalizePaymentMethod } from '../utils/formatters';
 
 interface ExpenseContextType {
-  // State
+  // Active State (excludes soft-deleted tombstones for all UI views & calculations)
   transactions: Transaction[];
   categories: Category[];
   paymentMethods: PaymentMethodItem[];
@@ -55,6 +55,11 @@ interface ExpenseContextType {
   recurring: RecurringTransaction[];
   settings: UserSettings;
   filters: FilterState;
+
+  // Full State (includes soft-deleted tombstones — for multi-device sync engine)
+  allTransactions: Transaction[];
+  allBudgets: Budget[];
+  allRecurring: RecurringTransaction[];
 
   // Filtered Data & Stats
   filteredTransactions: Transaction[];
@@ -130,14 +135,19 @@ const defaultFilters: FilterState = {
 const ExpenseContext = createContext<ExpenseContextType | undefined>(undefined);
 
 export const ExpenseProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const [transactions, setTransactions] = useState<Transaction[]>(getStoredTransactions);
+  const [rawTransactions, setRawTransactions] = useState<Transaction[]>(getStoredTransactions);
   const [categories, setCategories] = useState<Category[]>(getStoredCategories);
   const [paymentMethods, setPaymentMethods] = useState<PaymentMethodItem[]>(getStoredPaymentMethods);
-  const [budgets, setBudgets] = useState<Budget[]>(getStoredBudgets);
-  const [recurring, setRecurring] = useState<RecurringTransaction[]>(getStoredRecurring);
+  const [rawBudgets, setRawBudgets] = useState<Budget[]>(getStoredBudgets);
+  const [rawRecurring, setRawRecurring] = useState<RecurringTransaction[]>(getStoredRecurring);
   const [settings, setSettings] = useState<UserSettings>(getStoredSettings);
   const [filters, setFilters] = useState<FilterState>(defaultFilters);
   const [isExportModalOpen, setIsExportModalOpen] = useState(false);
+
+  // Active-only views (soft-deleted tombstones are strictly hidden from all UI views, charts, budgets & balance calculations)
+  const transactions = useMemo(() => rawTransactions.filter(tx => !tx.isDeleted), [rawTransactions]);
+  const budgets = useMemo(() => rawBudgets.filter(b => !b.isDeleted), [rawBudgets]);
+  const recurring = useMemo(() => rawRecurring.filter(r => !r.isDeleted), [rawRecurring]);
   const [isDark, setIsDark] = useState<boolean>(() => {
     if (typeof window === 'undefined') return false;
     const stored = getStoredSettings();
@@ -191,10 +201,10 @@ export const ExpenseProvider: React.FC<{ children: React.ReactNode }> = ({ child
     });
   };
 
-  // Sync to storage whenever state changes
+  // Sync full state (including soft-delete tombstones) to localStorage whenever state changes
   useEffect(() => {
-    saveTransactions(transactions);
-  }, [transactions]);
+    saveTransactions(rawTransactions);
+  }, [rawTransactions]);
 
   useEffect(() => {
     saveCategories(categories);
@@ -205,12 +215,12 @@ export const ExpenseProvider: React.FC<{ children: React.ReactNode }> = ({ child
   }, [paymentMethods]);
 
   useEffect(() => {
-    saveBudgets(budgets);
-  }, [budgets]);
+    saveBudgets(rawBudgets);
+  }, [rawBudgets]);
 
   useEffect(() => {
-    saveRecurring(recurring);
-  }, [recurring]);
+    saveRecurring(rawRecurring);
+  }, [rawRecurring]);
 
   useEffect(() => {
     saveSettings(settings);
@@ -407,7 +417,7 @@ export const ExpenseProvider: React.FC<{ children: React.ReactNode }> = ({ child
     return `tx_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`;
   };
 
-  // Transaction Actions
+  // Transaction Actions (with monotonic rev & soft-delete tombstones)
   const addTransaction = (data: Omit<Transaction, 'id' | 'createdAt'>) => {
     const now = new Date().toISOString();
     const newTx: Transaction = {
@@ -417,17 +427,19 @@ export const ExpenseProvider: React.FC<{ children: React.ReactNode }> = ({ child
       createdAt: now,
       updatedAt: now,
       isDeleted: false,
+      rev: 1,
       syncStatus: 'pending',
     };
-    setTransactions(prev => [newTx, ...prev]);
+    setRawTransactions(prev => [newTx, ...prev]);
   };
 
   const updateTransaction = (id: string, data: Partial<Transaction>) => {
     const now = new Date().toISOString();
-    setTransactions(prev => prev.map(tx => (tx.id === id ? { 
-      ...tx, 
+    setRawTransactions(prev => prev.map(tx => (tx.id === id ? {
+      ...tx,
       ...data,
       paymentMethod: data.paymentMethod ? normalizePaymentMethod(data.paymentMethod) : tx.paymentMethod,
+      rev: (tx.rev || 1) + 1,
       updatedAt: now,
       syncStatus: 'pending',
     } : tx)));
@@ -435,9 +447,10 @@ export const ExpenseProvider: React.FC<{ children: React.ReactNode }> = ({ child
 
   const deleteTransaction = (id: string) => {
     const now = new Date().toISOString();
-    setTransactions(prev => prev.map(tx => (tx.id === id ? {
+    setRawTransactions(prev => prev.map(tx => (tx.id === id ? {
       ...tx,
       isDeleted: true,
+      rev: (tx.rev || 1) + 1,
       updatedAt: now,
       syncStatus: 'pending',
     } : tx)));
@@ -485,48 +498,89 @@ export const ExpenseProvider: React.FC<{ children: React.ReactNode }> = ({ child
     return true;
   };
 
-  // Budget Actions
+  // Budget Actions (with monotonic rev & soft-delete tombstones)
   const addBudget = (data: Omit<Budget, 'id'>) => {
+    const now = new Date().toISOString();
     const newBudget: Budget = {
       ...data,
       id: `budget_${Date.now()}`,
+      rev: 1,
+      updatedAt: now,
+      isDeleted: false,
+      syncStatus: 'pending',
     };
-    setBudgets(prev => [...prev, newBudget]);
+    setRawBudgets(prev => [...prev, newBudget]);
   };
 
   const updateBudget = (id: string, data: Partial<Budget>) => {
-    setBudgets(prev => prev.map(b => (b.id === id ? { ...b, ...data } : b)));
+    const now = new Date().toISOString();
+    setRawBudgets(prev => prev.map(b => (b.id === id ? {
+      ...b,
+      ...data,
+      rev: (b.rev || 1) + 1,
+      updatedAt: now,
+      syncStatus: 'pending',
+    } : b)));
   };
 
   const deleteBudget = (id: string) => {
-    setBudgets(prev => prev.filter(b => b.id !== id));
+    const now = new Date().toISOString();
+    setRawBudgets(prev => prev.map(b => (b.id === id ? {
+      ...b,
+      isDeleted: true,
+      rev: (b.rev || 1) + 1,
+      updatedAt: now,
+      syncStatus: 'pending',
+    } : b)));
   };
 
-  // Recurring Actions
+  // Recurring Actions (with monotonic rev & soft-delete tombstones)
   const addRecurring = (data: Omit<RecurringTransaction, 'id'>) => {
+    const now = new Date().toISOString();
     const newRec: RecurringTransaction = {
       ...data,
+      paymentMethod: normalizePaymentMethod(data.paymentMethod),
       id: `rec_${Date.now()}`,
+      rev: 1,
+      updatedAt: now,
+      isDeleted: false,
+      syncStatus: 'pending',
     };
-    setRecurring(prev => [...prev, newRec]);
+    setRawRecurring(prev => [...prev, newRec]);
   };
 
   const updateRecurring = (id: string, data: Partial<RecurringTransaction>) => {
-    setRecurring(prev => prev.map(r => (r.id === id ? { ...r, ...data } : r)));
+    const now = new Date().toISOString();
+    setRawRecurring(prev => prev.map(r => (r.id === id ? {
+      ...r,
+      ...data,
+      paymentMethod: data.paymentMethod ? normalizePaymentMethod(data.paymentMethod) : r.paymentMethod,
+      rev: (r.rev || 1) + 1,
+      updatedAt: now,
+      syncStatus: 'pending',
+    } : r)));
   };
 
   const deleteRecurring = (id: string) => {
-    setRecurring(prev => prev.filter(r => r.id !== id));
+    const now = new Date().toISOString();
+    setRawRecurring(prev => prev.map(r => (r.id === id ? {
+      ...r,
+      isDeleted: true,
+      rev: (r.rev || 1) + 1,
+      updatedAt: now,
+      syncStatus: 'pending',
+    } : r)));
   };
 
   // Process due recurring transactions and insert them as transactions
   const processDueRecurring = (): number => {
     const today = format(new Date(), 'yyyy-MM-dd');
+    const now = new Date().toISOString();
     let generatedCount = 0;
     const newTransactionsToAdd: Transaction[] = [];
 
-    const updatedRecurring = recurring.map(rec => {
-      if (!rec.active || rec.nextDueDate > today) {
+    const updatedRecurring = rawRecurring.map(rec => {
+      if (rec.isDeleted || !rec.active || rec.nextDueDate > today) {
         return rec;
       }
 
@@ -538,10 +592,14 @@ export const ExpenseProvider: React.FC<{ children: React.ReactNode }> = ({ child
         type: rec.type,
         categoryId: rec.categoryId,
         date: rec.nextDueDate,
-        paymentMethod: rec.paymentMethod,
+        paymentMethod: normalizePaymentMethod(rec.paymentMethod),
         notes: rec.notes || 'Auto-generated recurring payment',
         recurringId: rec.id,
-        createdAt: new Date().toISOString(),
+        createdAt: now,
+        updatedAt: now,
+        isDeleted: false,
+        rev: 1,
+        syncStatus: 'pending',
       });
       generatedCount++;
 
@@ -566,12 +624,15 @@ export const ExpenseProvider: React.FC<{ children: React.ReactNode }> = ({ child
       return {
         ...rec,
         nextDueDate: format(nextDate, 'yyyy-MM-dd'),
+        rev: (rec.rev || 1) + 1,
+        updatedAt: now,
+        syncStatus: 'pending' as const,
       };
     });
 
     if (generatedCount > 0) {
-      setTransactions(prev => [...newTransactionsToAdd, ...prev]);
-      setRecurring(updatedRecurring);
+      setRawTransactions(prev => [...newTransactionsToAdd, ...prev]);
+      setRawRecurring(updatedRecurring);
     }
 
     return generatedCount;
@@ -588,19 +649,40 @@ export const ExpenseProvider: React.FC<{ children: React.ReactNode }> = ({ child
 
   const resetData = () => {
     const res = resetAllDataToDefault();
-    setTransactions(res.transactions);
+    setRawTransactions(res.transactions);
     setCategories(res.categories);
     setPaymentMethods(res.paymentMethods);
-    setBudgets(res.budgets);
-    setRecurring(res.recurring);
+    setRawBudgets(res.budgets);
+    setRawRecurring(res.recurring);
     setSettings(res.settings);
   };
 
   const clearData = () => {
-    const res = clearAllData();
-    setTransactions(res.transactions);
-    setBudgets(res.budgets);
-    setRecurring(res.recurring);
+    // Soft-delete all active records so multi-device Google Sheets sync propagates the wipe
+    // cleanly without resurrecting rows on the next pull, and mark storage initialized.
+    clearAllData();
+    const now = new Date().toISOString();
+    setRawTransactions(prev =>
+      prev.map(tx =>
+        tx.isDeleted
+          ? tx
+          : { ...tx, isDeleted: true, rev: (tx.rev || 1) + 1, updatedAt: now, syncStatus: 'pending' }
+      )
+    );
+    setRawBudgets(prev =>
+      prev.map(b =>
+        b.isDeleted
+          ? b
+          : { ...b, isDeleted: true, rev: (b.rev || 1) + 1, updatedAt: now, syncStatus: 'pending' }
+      )
+    );
+    setRawRecurring(prev =>
+      prev.map(r =>
+        r.isDeleted
+          ? r
+          : { ...r, isDeleted: true, rev: (r.rev || 1) + 1, updatedAt: now, syncStatus: 'pending' }
+      )
+    );
   };
 
   const exportJSON = () => {
@@ -621,9 +703,17 @@ export const ExpenseProvider: React.FC<{ children: React.ReactNode }> = ({ child
   const importJSON = (jsonString: string): boolean => {
     try {
       const data = JSON.parse(jsonString);
+      const now = new Date().toISOString();
       if (Array.isArray(data.transactions)) {
-        setTransactions(data.transactions);
-        saveTransactions(data.transactions);
+        const normalized: Transaction[] = data.transactions.map((tx: Transaction) => ({
+          ...tx,
+          paymentMethod: normalizePaymentMethod(tx.paymentMethod),
+          rev: typeof tx.rev === 'number' && tx.rev >= 1 ? tx.rev : 1,
+          updatedAt: tx.updatedAt || tx.createdAt || now,
+          isDeleted: Boolean(tx.isDeleted),
+        }));
+        setRawTransactions(normalized);
+        saveTransactions(normalized);
       }
       if (Array.isArray(data.categories)) {
         setCategories(data.categories);
@@ -634,12 +724,25 @@ export const ExpenseProvider: React.FC<{ children: React.ReactNode }> = ({ child
         savePaymentMethods(data.paymentMethods);
       }
       if (Array.isArray(data.budgets)) {
-        setBudgets(data.budgets);
-        saveBudgets(data.budgets);
+        const normalized: Budget[] = data.budgets.map((b: Budget) => ({
+          ...b,
+          rev: typeof b.rev === 'number' && b.rev >= 1 ? b.rev : 1,
+          updatedAt: b.updatedAt || now,
+          isDeleted: Boolean(b.isDeleted),
+        }));
+        setRawBudgets(normalized);
+        saveBudgets(normalized);
       }
       if (Array.isArray(data.recurring)) {
-        setRecurring(data.recurring);
-        saveRecurring(data.recurring);
+        const normalized: RecurringTransaction[] = data.recurring.map((r: RecurringTransaction) => ({
+          ...r,
+          paymentMethod: normalizePaymentMethod(r.paymentMethod),
+          rev: typeof r.rev === 'number' && r.rev >= 1 ? r.rev : 1,
+          updatedAt: r.updatedAt || now,
+          isDeleted: Boolean(r.isDeleted),
+        }));
+        setRawRecurring(normalized);
+        saveRecurring(normalized);
       }
       if (data.settings) {
         setSettings(data.settings);
@@ -660,6 +763,9 @@ export const ExpenseProvider: React.FC<{ children: React.ReactNode }> = ({ child
         paymentMethods,
         budgets,
         recurring,
+        allTransactions: rawTransactions,
+        allBudgets: rawBudgets,
+        allRecurring: rawRecurring,
         settings,
         filters,
         filteredTransactions,
@@ -675,9 +781,9 @@ export const ExpenseProvider: React.FC<{ children: React.ReactNode }> = ({ child
         addTransaction,
         updateTransaction,
         deleteTransaction,
-        setAllTransactions: setTransactions,
-        setAllBudgets: setBudgets,
-        setAllRecurring: setRecurring,
+        setAllTransactions: setRawTransactions,
+        setAllBudgets: setRawBudgets,
+        setAllRecurring: setRawRecurring,
         addCategory,
         updateCategory,
         deleteCategory,

@@ -1,11 +1,43 @@
 import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
-import { GoogleUser, GoogleSyncInfo, Transaction, Budget, RecurringTransaction } from '../types';
+import { GoogleUser, GoogleSyncInfo, Transaction, Budget, RecurringTransaction, SyncResult } from '../types';
 import {
   fetchGoogleUserInfo,
   findOrCreateTrackWiseSheet,
   pullDataFromSheet,
   pushDataToSheet,
+  mergeEntityCollections,
+  areTransactionsEqual,
+  areBudgetsEqual,
+  areRecurringEqual,
+  computeSplitWalletBalances,
 } from '../services/googleSheetsService';
+
+const SYNC_LOCK_NAME = 'trackwise_sheets_sync';
+
+// In-memory sequential fallback mutex when Web Locks API is unavailable
+let fallbackSyncLockChain: Promise<void> = Promise.resolve();
+
+async function withSyncLock<T>(task: () => Promise<T>): Promise<T> {
+  if (typeof navigator !== 'undefined' && navigator.locks && typeof navigator.locks.request === 'function') {
+    return navigator.locks.request(SYNC_LOCK_NAME, async () => {
+      return task();
+    });
+  }
+
+  let release!: () => void;
+  const next = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  const previous = fallbackSyncLockChain;
+  fallbackSyncLockChain = previous.then(() => next);
+  await previous;
+
+  try {
+    return await task();
+  } finally {
+    release();
+  }
+}
 
 const AUTH_STORAGE_KEYS = {
   USER: 'trackwise_google_user',
@@ -128,7 +160,7 @@ interface GoogleAuthContextType {
     upiBalance: number,
     cashBalance: number,
     currencySymbol: string
-  ) => Promise<boolean>;
+  ) => Promise<SyncResult>;
   pullFromSheet: () => Promise<{ transactions: Transaction[]; budgets: Budget[]; recurring: RecurringTransaction[] } | null>;
 }
 
@@ -400,76 +432,115 @@ export const GoogleAuthProvider: React.FC<{ children: React.ReactNode }> = ({ ch
   );
 
   /**
-   * Sync local engine with Google Sheet (Hybrid local-first push & pull)
+   * Hardened multi-device Pull-Before-Push sync wrapped in Web Locks API mutex
+   * ('trackwise_sheets_sync') with an in-memory fallback lock.
+   *
+   * 1. Acquires cross-tab lock so overlapping Pull -> Merge -> Push cycles cannot occur.
+   * 2. Pulls latest remote rows via values:batchGet.
+   * 3. Deterministically merges local + remote per ID (monotonic rev -> updatedAt tie-breaker)
+   *    and purges soft-deleted tombstones older than 30 days.
+   * 4. Recomputes exact UPI & Cash split balances from merged active transactions.
+   * 5. Clears trailing ghost rows and pushes reconciled rows via values:batchUpdate.
+   * 6. Returns merged arrays + exact localChanged flags so callers avoid redundant state updates.
    */
   const performSync = useCallback(
     async (
       transactions: Transaction[],
       budgets: Budget[],
       recurring: RecurringTransaction[],
-      upiBalance: number,
-      cashBalance: number,
+      _upiBalance: number,
+      _cashBalance: number,
       currencySymbol: string
-    ): Promise<boolean> => {
+    ): Promise<SyncResult> => {
       if (!accessToken || !user || !navigator.onLine) {
-        return false;
+        return { success: false };
       }
 
       if (isTokenExpired) {
         setSyncInfo((prev) => ({ ...prev, syncState: 'token_expired' }));
-        return false;
+        return { success: false };
       }
 
-      setSyncInfo((prev) => ({ ...prev, syncState: 'syncing', errorMessage: undefined }));
-
-      try {
-        let sheetId = syncInfo.spreadsheetId;
-        if (!sheetId) {
-          const sheet = await findOrCreateTrackWiseSheet(accessToken);
-          sheetId = sheet.spreadsheetId;
-          setSyncInfo((prev) => ({
-            ...prev,
-            spreadsheetId: sheet.spreadsheetId,
-            spreadsheetUrl: sheet.spreadsheetUrl,
-          }));
-          localStorage.setItem(AUTH_STORAGE_KEYS.SHEET_ID, sheet.spreadsheetId);
-          localStorage.setItem(AUTH_STORAGE_KEYS.SHEET_URL, sheet.spreadsheetUrl);
+      return withSyncLock(async (): Promise<SyncResult> => {
+        if (!navigator.onLine) {
+          return { success: false };
         }
 
-        // Push current data state to Google Sheet
-        await pushDataToSheet(
-          accessToken,
-          sheetId,
-          transactions,
-          budgets,
-          recurring,
-          upiBalance,
-          cashBalance,
-          currencySymbol
-        );
+        setSyncInfo((prev) => ({ ...prev, syncState: 'syncing', errorMessage: undefined }));
 
-        const now = new Date().toISOString();
-        setSyncInfo((prev) => ({
-          ...prev,
-          syncState: 'synced',
-          lastSyncedAt: now,
-          pendingCount: 0,
-        }));
-        localStorage.setItem(AUTH_STORAGE_KEYS.LAST_SYNC, now);
-        return true;
-      } catch (err: any) {
-        console.error('Google Sheets sync error:', err);
-        if (err.message === 'TOKEN_EXPIRED') {
-          setSyncInfo((prev) => ({ ...prev, syncState: 'token_expired' }));
-        } else {
+        try {
+          let sheetId = syncInfo.spreadsheetId || localStorage.getItem(AUTH_STORAGE_KEYS.SHEET_ID);
+          if (!sheetId) {
+            const sheet = await findOrCreateTrackWiseSheet(accessToken);
+            sheetId = sheet.spreadsheetId;
+            setSyncInfo((prev) => ({
+              ...prev,
+              spreadsheetId: sheet.spreadsheetId,
+              spreadsheetUrl: sheet.spreadsheetUrl,
+            }));
+            localStorage.setItem(AUTH_STORAGE_KEYS.SHEET_ID, sheet.spreadsheetId);
+            localStorage.setItem(AUTH_STORAGE_KEYS.SHEET_URL, sheet.spreadsheetUrl);
+          }
+
+          // Step 1: Pull latest remote rows immediately before pushing
+          const remoteData = await pullDataFromSheet(accessToken, sheetId);
+
+          // Step 2: Deterministic per-ID reconciliation + 30-day tombstone pruning
+          const nowMs = Date.now();
+          const mergedTransactions = mergeEntityCollections(transactions, remoteData.transactions, nowMs);
+          const mergedBudgets = mergeEntityCollections(budgets, remoteData.budgets, nowMs);
+          const mergedRecurring = mergeEntityCollections(recurring, remoteData.recurring, nowMs);
+
+          // Step 3: Compute live UPI & Liquid Cash balances from reconciled active transactions
+          const { upiBalance: mergedUpiBalance, cashBalance: mergedCashBalance } =
+            computeSplitWalletBalances(mergedTransactions);
+
+          // Step 4: Clear trailing ghost rows & push reconciled state atomically
+          await pushDataToSheet(
+            accessToken,
+            sheetId,
+            mergedTransactions,
+            mergedBudgets,
+            mergedRecurring,
+            mergedUpiBalance,
+            mergedCashBalance,
+            currencySymbol
+          );
+
+          const nowIso = new Date().toISOString();
           setSyncInfo((prev) => ({
             ...prev,
-            syncState: 'error',
-            errorMessage: err.message || 'Sync failed',
+            syncState: 'synced',
+            lastSyncedAt: nowIso,
+            pendingCount: 0,
           }));
+          localStorage.setItem(AUTH_STORAGE_KEYS.LAST_SYNC, nowIso);
+
+          return {
+            success: true,
+            mergedTransactions,
+            mergedBudgets,
+            mergedRecurring,
+            localChanged: {
+              transactions: !areTransactionsEqual(transactions, mergedTransactions),
+              budgets: !areBudgetsEqual(budgets, mergedBudgets),
+              recurring: !areRecurringEqual(recurring, mergedRecurring),
+            },
+          };
+        } catch (err: any) {
+          console.error('Google Sheets sync error:', err);
+          if (err?.message === 'TOKEN_EXPIRED') {
+            setSyncInfo((prev) => ({ ...prev, syncState: 'token_expired' }));
+          } else {
+            setSyncInfo((prev) => ({
+              ...prev,
+              syncState: 'error',
+              errorMessage: err?.message || 'Sync failed',
+            }));
+          }
+          return { success: false };
         }
-        return false;
-      }
+      });
     },
     [accessToken, user, isTokenExpired, syncInfo.spreadsheetId]
   );
